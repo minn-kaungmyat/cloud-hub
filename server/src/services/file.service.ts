@@ -259,7 +259,18 @@ export class FileService {
       whereClause.parentId = null;
       whereClause.isShared = false;
     } else {
-      whereClause.parentId = folderId;
+      let targetParentId = folderId;
+      const folderRecord = await prisma.file.findFirst({
+        where: { 
+          OR: [{ id: folderId }, { providerFileId: folderId }], 
+          cloudAccountId: { in: accountIds } 
+        },
+        select: { providerFileId: true }
+      });
+      if (folderRecord) {
+        targetParentId = folderRecord.providerFileId;
+      }
+      whereClause.parentId = targetParentId;
     }
 
     if (type === 'folder') {
@@ -342,6 +353,19 @@ export class FileService {
     if (folderId === 'root') return [];
 
     let currentId: string | null = folderId;
+
+    const startFolder = await prisma.file.findFirst({
+      where: {
+        OR: [{ id: folderId }, { providerFileId: folderId }],
+        cloudAccount: { userId }
+      },
+      select: { providerFileId: true }
+    });
+
+    if (startFolder) {
+      currentId = startFolder.providerFileId;
+    }
+
     const path = [];
     const visited = new Set<string>();
     
@@ -349,11 +373,11 @@ export class FileService {
       visited.add(currentId);
       const folder: any = await prisma.file.findFirst({
         where: { providerFileId: currentId, cloudAccount: { userId } },
-        select: { providerFileId: true, name: true, parentId: true }
+        select: { id: true, name: true, parentId: true }
       });
       if (!folder) break;
       
-      path.unshift({ id: folder.providerFileId, label: folder.name });
+      path.unshift({ id: folder.id, label: folder.name });
       currentId = folder.parentId;
     }
     
@@ -540,8 +564,11 @@ export class FileService {
     let localParentId = null;
 
     if (newParentId !== 'root') {
-      const targetFolder = await prisma.file.findUnique({
-        where: { id: newParentId }
+      const targetFolder = await prisma.file.findFirst({
+        where: { 
+          OR: [{ id: newParentId }, { providerFileId: newParentId }], 
+          cloudAccountId: cloudAccount.id 
+        }
       });
 
       if (!targetFolder || !targetFolder.isFolder) {
@@ -589,38 +616,35 @@ export class FileService {
     }
   }
 
-  async createFolder(accountId: string, userId: string, name: string, parentId: string) {
+  async createFolder(accountId: string, userId: string, folderName: string, parentProviderId: string) {
     const account = await prisma.cloudAccount.findFirst({
-      where: { id: accountId, userId },
+      where: { id: accountId, userId }
     });
 
-    if (!account) {
-      throw new AppError('Cloud account not found', 404);
-    }
-
-    let targetProviderId = 'root';
-    if (parentId !== 'root') {
-      const parentFolder = await prisma.file.findUnique({
-        where: { id: parentId }
-      });
-
-      if (!parentFolder || !parentFolder.isFolder) {
-        throw new AppError('Parent folder not found or is not a folder', 400);
-      }
-      targetProviderId = parentFolder.providerFileId;
-    }
+    if (!account) throw new AppError('Cloud account not found', 404);
+    if (!account.accessToken) throw new AppError('Account not authenticated', 401);
 
     if (account.provider === 'google-drive') {
-      if (!account.accessToken) {
-        throw new AppError('Account not authenticated', 401);
-      }
-      
       try {
+        let resolvedProviderParentId = parentProviderId;
+        if (parentProviderId !== 'root') {
+          const parentRecord = await prisma.file.findFirst({
+            where: { 
+              OR: [{ id: parentProviderId }, { providerFileId: parentProviderId }], 
+              cloudAccountId: account.id 
+            }
+          });
+          if (parentRecord) {
+            resolvedProviderParentId = parentRecord.providerFileId;
+          }
+        }
+
+        const { createFolder: createDriveFolder } = await import('../providers/google.provider');
         const driveFolder = await createDriveFolder(
           account.accessToken,
           account.refreshToken,
-          name,
-          targetProviderId
+          folderName,
+          resolvedProviderParentId
         );
 
         // Create local DB record
@@ -631,7 +655,7 @@ export class FileService {
             name: driveFolder.name as string,
             mimeType: driveFolder.mimeType as string,
             size: BigInt(0),
-            parentId: targetProviderId === 'root' ? null : targetProviderId,
+            parentId: resolvedProviderParentId === 'root' ? null : resolvedProviderParentId,
             modifiedTime: driveFolder.modifiedTime ? new Date(driveFolder.modifiedTime) : new Date(),
             hasThumbnail: false,
             isFolder: true,
@@ -652,28 +676,35 @@ export class FileService {
     }
   }
 
-  async createFoldersBatch(accountId: string, userId: string, paths: string[], rootParentId: string) {
+  async createFoldersBatch(accountId: string, userId: string, paths: string[], parentProviderId: string) {
     const account = await prisma.cloudAccount.findFirst({
-      where: { id: accountId, userId },
+      where: { id: accountId, userId }
     });
 
     if (!account) throw new AppError('Cloud account not found', 404);
-    if (account.provider !== 'google-drive') throw new AppError('Provider not supported', 400);
     if (!account.accessToken) throw new AppError('Account not authenticated', 401);
+    if (account.provider !== 'google-drive') throw new AppError('Provider not supported', 400);
+
+    let resolvedProviderParentId = parentProviderId;
+    if (parentProviderId !== 'root') {
+      const parentRecord = await prisma.file.findFirst({
+        where: { 
+          OR: [{ id: parentProviderId }, { providerFileId: parentProviderId }], 
+          cloudAccountId: account.id 
+        }
+      });
+      if (parentRecord) {
+        resolvedProviderParentId = parentRecord.providerFileId;
+      }
+    }
 
     // Sort paths by depth (number of slashes) so parents are created before children
     const sortedPaths = [...paths].sort((a, b) => a.split('/').length - b.split('/').length);
     
     // Map of full path string to its Google Drive folderId
     const folderIdMap: Record<string, string> = {
-      'root': rootParentId
+      '': resolvedProviderParentId
     };
-
-    let targetRootProviderId = 'root';
-    if (rootParentId !== 'root') {
-      const rootFolder = await prisma.file.findUnique({ where: { id: rootParentId } });
-      if (rootFolder) targetRootProviderId = rootFolder.providerFileId;
-    }
 
     // Process sequentially to ensure parent exists before child
     for (const path of sortedPaths) {
@@ -681,14 +712,13 @@ export class FileService {
       const folderName = parts[parts.length - 1];
       const parentPath = parts.slice(0, -1).join('/');
       
-      const parentProviderId = parentPath === '' ? targetRootProviderId : folderIdMap[parentPath];
+      const parentProviderId = folderIdMap[parentPath];
       
       if (!parentProviderId) {
         throw new AppError(`Missing parent folder ID for path: ${path}`, 500);
       }
 
       // Check if this specific folder already exists in our DB to avoid duplicates
-      // (This is an optimization, though pre-flight usually means they don't exist yet)
       const existing = await prisma.file.findFirst({
         where: {
           cloudAccountId: account.id,
@@ -735,16 +765,6 @@ export class FileService {
         throw new AppError(`Failed to create folder ${path} on Google Drive`, 500);
       }
     }
-
-    // Now we need to map the providerFileIds back to local DB IDs for the frontend to use
-    // because uploadStore expects local DB IDs for parentId, wait no, does uploadStore use local DB IDs?
-    // Let's return local DB IDs because fileService.uploadFile expects parentId to be providerFileId or DB ID?
-    // uploadFile expects the providerFileId or local ID. It checks:
-    // `const parentRecord = await prisma.file.findFirst({ where: { providerFileId: parentId } })`
-    // Actually uploadFile uses `parentId` to upload to Drive, so it needs providerFileId.
-    // Wait, let's look at uploadFile:
-    // `googleProvider.uploadFile(..., parentId)` -> it uses `parentId` directly as Google Drive ID.
-    // So returning `providerFileId` in the map is perfect.
     
     return folderIdMap;
   }
@@ -771,6 +791,7 @@ export class FileService {
       }
       
       try {
+        const { trashFile } = await import('../providers/google.provider');
         await trashFile(
           cloudAccount.accessToken,
           cloudAccount.refreshToken,
@@ -804,6 +825,19 @@ export class FileService {
     if (!account.accessToken) throw new Error('Account not authenticated');
 
     try {
+      let resolvedProviderParentId = parentId;
+      if (parentId !== 'root') {
+        const parentRecord = await prisma.file.findFirst({
+          where: { 
+            OR: [{ id: parentId }, { providerFileId: parentId }], 
+            cloudAccountId: account.id 
+          }
+        });
+        if (parentRecord) {
+          resolvedProviderParentId = parentRecord.providerFileId;
+        }
+      }
+
       // 1. Upload to Google Drive (Provider handles 403 / quotaExceeded errors by throwing)
       const driveFile = await googleProvider.uploadFile(
         account.accessToken,
@@ -811,19 +845,8 @@ export class FileService {
         originalName,
         mimeType,
         filePath,
-        parentId
+        resolvedProviderParentId
       );
-
-      // 2. Resolve parentId in database (so we can insert the file properly)
-      let parentDbId: string | null = null;
-      if (parentId !== 'root') {
-        const parentRecord = await prisma.file.findFirst({
-          where: { providerFileId: parentId, cloudAccountId: account.id }
-        });
-        if (parentRecord) {
-          parentDbId = parentRecord.id;
-        }
-      }
 
       // 3. Insert into our PostgreSQL DB so it appears instantly
       const dbFile = await prisma.file.create({
@@ -836,7 +859,7 @@ export class FileService {
           size: BigInt(parseInt(driveFile.size || size.toString(), 10) || size),
           hasThumbnail: !!driveFile.thumbnailLink,
           cloudAccountId: account.id,
-          parentId: parentDbId,
+          parentId: resolvedProviderParentId === 'root' ? null : resolvedProviderParentId,
           modifiedTime: driveFile.modifiedTime ? new Date(driveFile.modifiedTime) : new Date(),
         }
       });
