@@ -4,12 +4,10 @@ import { Clock, Star, FileSearch, RefreshCw } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { SidebarItem } from './SidebarItem';
 import { SidebarSection } from './SidebarSection';
-import { TagPill } from './TagPill';
 import { AddAccountButton } from './AddAccountButton';
 import { ProviderIcon } from './ProviderIcon';
 import { StatusBadge } from './StatusBadge';
 import { useCloudAccounts, useIncrementalSync } from '../hooks/useCloudAccounts';
-import { mockTags } from '../utils/mockData';
 
 export const Sidebar = () => {
   const navigate = useNavigate();
@@ -98,13 +96,6 @@ export const Sidebar = () => {
           active={activeItem === 'large-files'}
           onClick={() => navigate('/?account=large-files')}
         />
-
-        <SidebarSection label="Tags" />
-        <div className="px-4 flex flex-col gap-1">
-          {mockTags.map((tag) => (
-            <TagPill key={tag.id} label={tag.name} colorClass={tag.color} />
-          ))}
-        </div>
       </div>
 
       {/* Footer (User Profile) */}
