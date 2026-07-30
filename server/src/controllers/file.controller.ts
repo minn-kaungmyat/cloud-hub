@@ -95,8 +95,14 @@ export class FileController {
           'Authorization': `Bearer ${accessToken}`
         }
       });
+      
+      // If Google fails to return a thumbnail (e.g. 404), return a 204 No Content.
+      // Throwing a 404 AppError here causes global error logging, which triggers 
+      // Cloudflare's DDoS brute-force protection if many thumbnails fail at once,
+      // leading to temporary IP bans.
       if (!response.ok) {
-        throw new AppError(`Failed to fetch thumbnail from Google: ${response.statusText}`, response.status);
+        res.status(204).end();
+        return;
       }
       
       const contentType = response.headers.get('content-type');
@@ -109,8 +115,8 @@ export class FileController {
       const arrayBuffer = await response.arrayBuffer();
       res.send(Buffer.from(arrayBuffer));
     } catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError('Failed to load thumbnail', 500);
+      // Fail silently for thumbnails to prevent IP bans
+      res.status(204).end();
     }
   });
   renameFile = asyncHandler(async (req: Request, res: Response) => {
