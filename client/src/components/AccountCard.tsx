@@ -1,0 +1,66 @@
+import { MoreHorizontal, Edit3, RefreshCw, Unlink } from 'lucide-react';
+import { ProviderIcon, getProviderLabel } from './ProviderIcon';
+import { StatusBadge } from './StatusBadge';
+import { StorageGauge } from './StorageGauge';
+import { DropdownMenu } from './DropdownMenu';
+import type { CloudAccount } from '../types';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../utils/api';
+import { toast } from 'sonner';
+
+export const AccountCard = ({ account }: { account: CloudAccount }) => {
+  const queryClient = useQueryClient();
+
+  const disconnectMutation = useMutation({
+    mutationFn: async () => {
+      await api.delete(`/api/cloud-accounts/${account.id}`);
+    },
+    onSuccess: () => {
+      toast.success(`${account.label} disconnected`);
+      queryClient.invalidateQueries({ queryKey: ['cloudAccounts'] });
+    },
+    onError: () => {
+      toast.error('Failed to disconnect account');
+    }
+  });
+
+  const items = [
+    { id: 'rename', label: 'Rename', icon: <Edit3 size={14} />, onClick: () => {} },
+    { id: 'refresh', label: 'Refresh Auth', icon: <RefreshCw size={14} />, onClick: () => {} },
+    { 
+      id: 'disconnect', 
+      label: 'Disconnect', 
+      icon: <Unlink size={14} />, 
+      danger: true, 
+      onClick: () => {
+        if (confirm('Are you sure you want to disconnect this account?')) {
+          disconnectMutation.mutate();
+        }
+      } 
+    },
+  ];
+
+  return (
+    <div className="border border-zinc-800 rounded-md bg-zinc-900/60 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-md bg-zinc-800 flex items-center justify-center shrink-0">
+            <ProviderIcon provider={account.provider} size={16} className="text-zinc-400" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-zinc-200 truncate">{account.label}</div>
+            <div className="text-[11px] text-zinc-500 truncate">{account.email}</div>
+          </div>
+        </div>
+        <DropdownMenu trigger={<MoreHorizontal size={16} className="text-zinc-500 hover:text-zinc-300 transition-colors" />} items={items} align="right" />
+      </div>
+
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[11px] text-zinc-500">{getProviderLabel(account.provider)}</span>
+        <StatusBadge status={account.status} />
+      </div>
+
+      <StorageGauge used={account.storageUsed} total={account.storageTotal} />
+    </div>
+  );
+};

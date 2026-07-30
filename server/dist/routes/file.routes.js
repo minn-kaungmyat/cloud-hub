@@ -1,0 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const file_controller_1 = require("../controllers/file.controller");
+const requireAuth_1 = require("../middlewares/requireAuth");
+const upload_1 = require("../middlewares/upload");
+const router = (0, express_1.Router)();
+// Protect all file routes
+router.use(requireAuth_1.requireAuth);
+router.post('/sync/:accountId', file_controller_1.fileController.syncFiles);
+router.post('/sync/incremental/:accountId', file_controller_1.fileController.incrementalSync);
+router.post('/upload/:accountId', upload_1.upload.single('file'), file_controller_1.fileController.uploadFile);
+router.get('/search', file_controller_1.fileController.searchFiles);
+router.get('/folder/:folderId/path', file_controller_1.fileController.getFolderPath);
+router.get('/', file_controller_1.fileController.getFiles);
+router.post('/folder', file_controller_1.fileController.createFolder);
+router.post('/folders/batch', file_controller_1.fileController.createFoldersBatch);
+router.get('/:id/thumbnail', file_controller_1.fileController.getThumbnail);
+router.patch('/:id/rename', file_controller_1.fileController.renameFile);
+router.patch('/:id/move', file_controller_1.fileController.moveFile);
+router.get('/:id/download', file_controller_1.fileController.downloadFile);
+router.delete('/:id', file_controller_1.fileController.deleteFile);
+exports.default = router;

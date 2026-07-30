@@ -1,0 +1,264 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.uploadFile = exports.listChanges = exports.getStartPageToken = exports.trashFile = exports.createFolder = exports.moveFile = exports.downloadFileStream = exports.renameFile = exports.getDriveQuota = exports.getThumbnailLink = exports.listFiles = exports.getUserInfo = exports.getTokens = exports.generateAuthUrl = exports.getGoogleOAuthClient = void 0;
+const googleapis_1 = require("googleapis");
+const fs_1 = __importDefault(require("fs"));
+const SCOPES = [
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/userinfo.email',
+];
+const getGoogleOAuthClient = () => {
+    return new googleapis_1.google.auth.OAuth2({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        redirectUri: `${process.env.API_URL || 'http://localhost:3000'}/api/cloud-accounts/callback/google-drive`
+    });
+};
+exports.getGoogleOAuthClient = getGoogleOAuthClient;
+const generateAuthUrl = (state) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    return oAuth2Client.generateAuthUrl({
+        access_type: 'offline',
+        prompt: 'consent',
+        scope: SCOPES,
+        state,
+        redirect_uri: `${process.env.API_URL || 'http://localhost:3000'}/api/cloud-accounts/callback/google-drive`
+    });
+};
+exports.generateAuthUrl = generateAuthUrl;
+const getTokens = async (code) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    const { tokens } = await oAuth2Client.getToken(code);
+    return tokens;
+};
+exports.getTokens = getTokens;
+const getUserInfo = async (accessToken) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({ access_token: accessToken });
+    const oauth2 = googleapis_1.google.oauth2({ version: 'v2', auth: oAuth2Client });
+    const { data } = await oauth2.userinfo.get();
+    return data; // { email, id, ... }
+};
+exports.getUserInfo = getUserInfo;
+const listFiles = async (accessToken, refreshToken) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    // Get the actual root folder ID ("My Drive" has a real ID like 0AMm-r4-DDJMqUk9PVA)
+    const rootRes = await drive.files.get({ fileId: 'root', fields: 'id' });
+    const rootFolderId = rootRes.data.id;
+    console.log('Google Drive root folder ID:', rootFolderId);
+    const allFiles = [];
+    let pageToken = undefined;
+    do {
+        const res = await drive.files.list({
+            pageSize: 1000,
+            fields: 'nextPageToken, files(id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe)',
+            q: "trashed = false",
+            pageToken: pageToken,
+        });
+        if (res.data.files) {
+            allFiles.push(...res.data.files);
+            console.log(`Fetched ${res.data.files.length} files... (Total: ${allFiles.length})`);
+        }
+        pageToken = res.data.nextPageToken || undefined;
+    } while (pageToken);
+    return { files: allFiles, rootFolderId: rootFolderId };
+};
+exports.listFiles = listFiles;
+const getThumbnailLink = async (accessToken, refreshToken, fileId) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    const res = await drive.files.get({
+        fileId,
+        fields: 'thumbnailLink'
+    });
+    return res.data.thumbnailLink || null;
+};
+exports.getThumbnailLink = getThumbnailLink;
+const getDriveQuota = async (accessToken, refreshToken) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    const res = await drive.about.get({
+        fields: 'storageQuota'
+    });
+    return res.data.storageQuota;
+};
+exports.getDriveQuota = getDriveQuota;
+const renameFile = async (accessToken, refreshToken, fileId, newName) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    const res = await drive.files.update({
+        fileId,
+        requestBody: {
+            name: newName,
+        },
+        fields: 'id, name, modifiedTime',
+    });
+    return res.data;
+};
+exports.renameFile = renameFile;
+const downloadFileStream = async (accessToken, refreshToken, fileId, mimeType) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    // Map Google Workspace mime types to standard Office formats
+    const exportMimeTypes = {
+        'application/vnd.google-apps.document': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.google-apps.spreadsheet': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.google-apps.presentation': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    };
+    const exportMimeType = exportMimeTypes[mimeType];
+    if (exportMimeType) {
+        // Export Google Workspace file
+        return drive.files.export({
+            fileId,
+            mimeType: exportMimeType
+        }, { responseType: 'stream' });
+    }
+    else {
+        // Download standard file
+        return drive.files.get({
+            fileId,
+            alt: 'media'
+        }, { responseType: 'stream' });
+    }
+};
+exports.downloadFileStream = downloadFileStream;
+const moveFile = async (accessToken, refreshToken, fileId, newParentId) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    // First, get the current parents
+    const file = await drive.files.get({
+        fileId: fileId,
+        fields: 'parents'
+    });
+    const currentParents = file.data.parents?.join(',') || '';
+    // Google Drive moves a file by adding it to a new parent and removing it from the old parent
+    const res = await drive.files.update({
+        fileId,
+        addParents: newParentId,
+        removeParents: currentParents,
+        fields: 'id, parents, modifiedTime'
+    });
+    return res.data;
+};
+exports.moveFile = moveFile;
+const createFolder = async (accessToken, refreshToken, name, parentId) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    const fileMetadata = {
+        name: name,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: parentId !== 'root' ? [parentId] : undefined,
+    };
+    const res = await drive.files.create({
+        requestBody: fileMetadata,
+        fields: 'id, name, mimeType, modifiedTime'
+    });
+    return res.data;
+};
+exports.createFolder = createFolder;
+const trashFile = async (accessToken, refreshToken, fileId) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    const res = await drive.files.update({
+        fileId,
+        requestBody: { trashed: true }
+    });
+    return res.data;
+};
+exports.trashFile = trashFile;
+const getStartPageToken = async (accessToken, refreshToken) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    const res = await drive.changes.getStartPageToken({});
+    return res.data.startPageToken;
+};
+exports.getStartPageToken = getStartPageToken;
+const listChanges = async (accessToken, refreshToken, pageToken) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    const allChanges = [];
+    let currentToken = pageToken;
+    let newStartPageToken = undefined;
+    do {
+        const res = await drive.changes.list({
+            pageToken: currentToken,
+            fields: 'newStartPageToken, nextPageToken, changes(fileId, removed, file(id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe))',
+        });
+        if (res.data.changes) {
+            allChanges.push(...res.data.changes);
+        }
+        if (res.data.newStartPageToken) {
+            newStartPageToken = res.data.newStartPageToken;
+        }
+        currentToken = res.data.nextPageToken || undefined;
+    } while (currentToken);
+    return { changes: allChanges, newStartPageToken };
+};
+exports.listChanges = listChanges;
+const uploadFile = async (accessToken, refreshToken, name, mimeType, filePath, parentId) => {
+    const oAuth2Client = (0, exports.getGoogleOAuthClient)();
+    oAuth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken || undefined
+    });
+    const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
+    const fileMetadata = {
+        name: name,
+        parents: parentId !== 'root' ? [parentId] : undefined,
+    };
+    const media = {
+        mimeType: mimeType,
+        body: fs_1.default.createReadStream(filePath),
+    };
+    const res = await drive.files.create({
+        requestBody: fileMetadata,
+        media: media,
+        fields: 'id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe'
+    });
+    return res.data;
+};
+exports.uploadFile = uploadFile;

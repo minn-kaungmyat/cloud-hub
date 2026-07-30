@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  avatar    String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cloudAccounts CloudAccount[]
+  favorites     Favorite[]
+  tags          Tag[]
+  searchHistory SearchHistory[]
+
+  @@map("users")
+}
+
+model CloudAccount {
+  id                String   @id @default(uuid())
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  email             String
+  refreshToken      String?  @map("refresh_token")
+  accessToken       String?  @map("access_token")
+  expiresAt         DateTime? @map("expires_at")
+  storageUsed       BigInt?   @map("storage_used")
+  storageTotal      BigInt?   @map("storage_total")
+  
+  // Sync tracking
+  syncStatus        String   @default("idle") @map("sync_status")  // idle | syncing | completed | failed
+  lastSyncedAt      DateTime? @map("last_synced_at")
+  syncError         String?  @map("sync_error")
+  fileCount         Int      @default(0) @map("file_count")
+  syncToken         String?  @map("sync_token")
+  
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  files             File[]
+
+  @@map("cloud_accounts")
+}
+
+model File {
+  id               String   @id @default(uuid())
+  providerFileId   String   @map("provider_file_id")
+  provider         String
+  name             String
+  mimeType         String   @map("mime_type")
+  size             BigInt
+  parentId         String?  @map("parent_id")
+  modifiedTime     DateTime @map("modified_time")
+  hasThumbnail     Boolean  @default(false) @map("has_thumbnail")
+  isFolder         Boolean  @default(false) @map("is_folder")
+  isShared         Boolean  @default(false) @map("is_shared")
+
+  cloudAccountId   String   @map("cloud_account_id")
+  cloudAccount     CloudAccount @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+
+  favorites        Favorite[]
+  fileTags         FileTag[]
+
+  @@map("files")
+}
+
+model Favorite {
+  id       String @id @default(uuid())
+  userId   String @map("user_id")
+  fileId   String @map("file_id")
+
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  file     File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("favorites")
+}
+
+model Tag {
+  id       String @id @default(uuid())
+  name     String
+  userId   String @map("user_id")
+
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileTags FileTag[]
+
+  @@map("tags")
+}
+
+model FileTag {
+  id       String @id @default(uuid())
+  tagId    String @map("tag_id")
+  fileId   String @map("file_id")
+
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  file     File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@map("file_tags")
+}
+
+model SearchHistory {
+  id        String   @id @default(uuid())
+  query     String
+  createdAt DateTime @default(now()) @map("created_at")
+  userId    String   @map("user_id")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("search_history")
+}
