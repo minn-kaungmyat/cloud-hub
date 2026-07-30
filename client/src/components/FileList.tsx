@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import type { CloudFile } from '../types';
 
 export const FileList = () => {
-  const { selectedFileId, selectedFileIds, setSelectedFile, clearSelection, viewMode } = useFileStore();
+  const { selectedFileId, selectedFileIds, clearSelection, viewMode } = useFileStore();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeAccount = searchParams.get('account') || 'google-drive';
@@ -96,7 +96,7 @@ export const FileList = () => {
 
   const handleDoubleClick = (file: CloudFile) => {
     if (file.isFolder) {
-      searchParams.set('folder', file.providerFileId);
+      searchParams.set('folder', file.id);
       setSearchParams(searchParams);
       clearSelection();
     }

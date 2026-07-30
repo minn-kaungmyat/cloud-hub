@@ -29,5 +29,4 @@ export * from './StatusBadge';
 export * from './StorageGauge';
 export * from './TagPill';
 export * from './UploadDropzone';
-export * from './UploadModal';
 export * from './UserMenu';

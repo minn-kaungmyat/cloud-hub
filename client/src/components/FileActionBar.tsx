@@ -96,10 +96,11 @@ export const FileActionBar = () => {
               e.target.value = '';
             }}
           />
-          {/* @ts-ignore - webkitdirectory is a non-standard attribute but widely supported */}
+         
           <input 
             type="file" 
             multiple 
+          
             webkitdirectory="true" 
             directory="true"
             ref={folderInputRef} 

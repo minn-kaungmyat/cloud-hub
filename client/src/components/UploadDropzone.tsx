@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router-dom';
 
 export const UploadDropzone = () => {
   const { dragOver, setDragOver } = useUIStore();
-  const addUploads = useUploadStore((s) => s.addUploads);
   const addFolderUploads = useUploadStore((s) => s.addFolderUploads);
   
   const [searchParams] = useSearchParams();

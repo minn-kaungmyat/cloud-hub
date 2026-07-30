@@ -65,7 +65,7 @@ const FolderTreeItem = ({ folderId, localId, name, depth = 0, accountId, selecte
           {folders.map((child) => (
             <FolderTreeItem
               key={child.id}
-              folderId={child.providerFileId}
+              folderId={child.id}
               localId={child.id}
               name={child.name}
               depth={depth + 1}

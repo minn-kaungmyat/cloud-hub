@@ -116,7 +116,7 @@ export const Inspector = () => {
               variant="danger" 
               onClick={() => openConfirm('Delete File', `Are you sure you want to delete "${file.name}"?`, 'danger', () => {
                 deleteFile(file.id, {
-                  onSuccess: () => clearSelection()
+                  onSuccess: () => useFileStore.getState().clearSelection()
                 });
               })} 
             />
