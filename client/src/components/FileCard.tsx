@@ -20,6 +20,7 @@ export const FileCard = ({ file, selected, onClick, onDoubleClick }: FileCardPro
 
   return (
     <div
+      id={`file-${file.id}`}
       onClick={(e) => {
         e.stopPropagation();
         onClick(e, file);

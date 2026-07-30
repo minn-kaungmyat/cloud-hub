@@ -40,6 +40,7 @@ export const FileRow = ({ file, selected, onClick, onDoubleClick }: FileRowProps
 
   return (
     <div
+      id={`file-${file.id}`}
       onClick={(e) => {
         e.stopPropagation();
         onClick(e, file);
@@ -93,7 +94,9 @@ export const FileRow = ({ file, selected, onClick, onDoubleClick }: FileRowProps
             const event = new CustomEvent('move-file', { detail: { fileIds: [data.id], targetFolderId: file.id } });
             window.dispatchEvent(event);
           }
-        } catch { }
+        } catch { 
+          // Ignore invalid JSON from drag event
+        }
       }}
       className={`flex items-center h-9 px-4 border-b border-zinc-800/40 cursor-pointer transition-colors text-sm select-none group ${
         selected || isChecked

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { FolderX, Loader2 } from 'lucide-react';
 import { useInView } from 'react-intersection-observer';
 import { FileGridHeader } from './FileGridHeader';
@@ -16,6 +16,7 @@ import type { CloudFile } from '../types';
 export const FileList = () => {
   const { selectedFileId, selectedFileIds, clearSelection, viewMode } = useFileStore();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
 
   const activeAccount = searchParams.get('account') || 'google-drive';
   const accountId = ['recent', 'favorites', 'large-files'].includes(activeAccount) ? undefined : activeAccount;
@@ -42,6 +43,31 @@ export const FileList = () => {
       fetchNextPage();
     }
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Contextual Navigation: Auto-scroll to the item specifically after jumping from Search
+  const scrollToId = location.state?.scrollToId;
+  useEffect(() => {
+    if (scrollToId && status === 'success') {
+      requestAnimationFrame(() => {
+        const element = document.getElementById(`file-${scrollToId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Clean up the history state so it doesn't trigger on 'Back' navigation
+          const newHistoryState = { ...window.history.state };
+          if (newHistoryState.usr) {
+            delete newHistoryState.usr.scrollToId;
+          }
+          
+          window.history.replaceState(
+            newHistoryState, 
+            '', 
+            window.location.pathname + window.location.search
+          );
+        }
+      });
+    }
+  }, [scrollToId, status]);
 
   const displayedFiles = React.useMemo(() => {
     if (!data) return [];

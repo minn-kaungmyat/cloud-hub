@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../utils/api';
 import { queryClient } from '../utils/queryClient';
+import axios from 'axios';
 
 export interface UploadItem {
   id: string;
@@ -12,6 +13,7 @@ export interface UploadItem {
   error?: string;
   accountId: string;
   folderId: string;
+  abortController?: AbortController;
 }
 
 interface UploadStore {
@@ -23,6 +25,7 @@ interface UploadStore {
   toggleExpanded: () => void;
   setExpanded: (expanded: boolean) => void;
   dismissAllCompleted: () => void;
+  cancelUpload: (id: string) => void;
   processQueue: () => void;
 }
 
@@ -122,6 +125,24 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
     }));
   },
   
+  cancelUpload: (id) => {
+    const { uploads } = get();
+    const item = uploads.find(u => u.id === id);
+    if (!item) return;
+    
+    if (item.abortController) {
+      item.abortController.abort();
+    }
+    
+    set((state) => ({
+      uploads: state.uploads.map((u) => 
+        u.id === id ? { ...u, status: 'error', error: 'Canceled by user' } : u
+      ),
+    }));
+    
+    get().processQueue();
+  },
+  
   processQueue: () => {
     const { uploads } = get();
     const activeCount = uploads.filter(u => u.status === 'uploading' || u.status === 'processing').length;
@@ -138,11 +159,20 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
       
       itemsToStart.forEach(async (item) => {
         try {
+          const abortController = new AbortController();
+          
+          set(state => ({
+            uploads: state.uploads.map(u => 
+              u.id === item.id ? { ...u, abortController } : u
+            )
+          }));
+          
           const formData = new FormData();
           formData.append('file', item.file);
           formData.append('parentId', item.folderId);
           
           await api.post(`/api/files/upload/${item.accountId}`, formData, {
+            signal: abortController.signal,
             headers: { 'Content-Type': 'multipart/form-data' },
             onUploadProgress: (progressEvent) => {
               if (progressEvent.total) {
@@ -175,7 +205,9 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
           console.error(error);
           let errorMsg = 'Upload failed';
           
-          if (error.response?.data?.message) {
+          if (axios.isCancel(error)) {
+            errorMsg = 'Canceled by user';
+          } else if (error.response?.data?.message) {
             errorMsg = error.response.data.message;
           } else if (error.response?.status === 403 || error.message?.toLowerCase().includes('quota')) {
             errorMsg = 'Upload failed: Not enough storage space.';

@@ -21,7 +21,7 @@ export * from './MoveModal';
 export * from './NewFolderModal';
 export * from './ProviderIcon';
 export * from './RenameModal';
-export * from './SearchModal';
+export * from './SearchOverlay';
 export * from './Sidebar';
 export * from './SidebarItem';
 export * from './SidebarSection';

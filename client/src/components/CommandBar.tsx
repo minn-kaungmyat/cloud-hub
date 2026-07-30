@@ -15,13 +15,29 @@ export const CommandBar = ({ segments, viewMode, onNavigate, onViewModeChange }:
   const { setSearchOpen } = useUIStore();
 
   return (
-    <header className="h-12 flex items-center px-4 border-b border-zinc-800/60 gap-4 shrink-0 justify-between">
-      <div className="flex-1 min-w-0">
+    <header className="h-12 flex items-center px-4 border-b border-zinc-800/60 shrink-0">
+      {/* Left: Breadcrumbs */}
+      <div className="flex-1 min-w-0 pr-4">
         <Breadcrumb segments={segments} onNavigate={onNavigate} />
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="flex items-center h-8 border border-zinc-800/80 rounded-md overflow-hidden">
+      {/* Center: Prominent Search Trigger */}
+      <div className="flex-[2] max-w-2xl flex justify-center">
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="flex items-center h-[34px] bg-zinc-900/80 border border-zinc-800 rounded-lg px-3 text-sm text-zinc-400 w-full max-w-[500px] cursor-pointer hover:bg-zinc-800 hover:border-zinc-700 hover:text-zinc-300 transition-all gap-3 shadow-sm group"
+        >
+          <Search size={16} className="shrink-0 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+          <span className="flex-1 text-left tracking-wide">Search across your cloud...</span>
+          <div className="hidden sm:block">
+            <KeyboardShortcut keys={['⌘', 'K']} />
+          </div>
+        </button>
+      </div>
+
+      {/* Right: Actions */}
+      <div className="flex-1 flex justify-end items-center gap-2 pl-4">
+        <div className="flex items-center h-8 border border-zinc-800/80 rounded-md overflow-hidden bg-zinc-950">
           <button
             onClick={() => onViewModeChange('list')}
             className={`flex items-center justify-center w-8 h-full transition-colors ${viewMode === 'list' ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -35,15 +51,6 @@ export const CommandBar = ({ segments, viewMode, onNavigate, onViewModeChange }:
             <LayoutGrid size={14} />
           </button>
         </div>
-
-        <button
-          onClick={() => setSearchOpen(true)}
-          className="flex items-center h-8 bg-zinc-900 border border-zinc-800/80 rounded-md px-2.5 text-xs text-zinc-500 w-56 cursor-text hover:border-zinc-700 transition-colors gap-2"
-        >
-          <Search size={14} className="shrink-0" />
-          <span className="flex-1 text-left">Search files...</span>
-          <KeyboardShortcut keys={['⌘', 'K']} />
-        </button>
       </div>
     </header>
   );

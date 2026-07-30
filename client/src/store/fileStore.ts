@@ -18,6 +18,7 @@ interface FileStore {
   setBulkMode: (on: boolean) => void;
   setViewMode: (mode: ViewMode) => void;
   toggleInspector: () => void;
+  setInspectorOpen: (open: boolean) => void;
 }
 
 export const useFileStore = create<FileStore>()(
@@ -76,6 +77,8 @@ export const useFileStore = create<FileStore>()(
       setViewMode: (mode) => set({ viewMode: mode }),
 
       toggleInspector: () => set((state) => ({ inspectorOpen: !state.inspectorOpen })),
+      
+      setInspectorOpen: (open) => set({ inspectorOpen: open }),
     }),
     {
       name: 'file-store-settings',

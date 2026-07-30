@@ -3,7 +3,7 @@ import { useUploadStore } from '../store/uploadStore';
 import { formatFileSize } from '../utils/format';
 
 export const UploadManager = () => {
-  const { uploads, isExpanded, toggleExpanded, dismissAllCompleted } = useUploadStore();
+  const { uploads, isExpanded, toggleExpanded, dismissAllCompleted, cancelUpload } = useUploadStore();
 
   if (uploads.length === 0) return null;
 
@@ -17,7 +17,7 @@ export const UploadManager = () => {
 
   const subText = allComplete
     ? null
-    : `Less than a minute left...`;
+    : `Uploading to cloud...`;
 
   return (
     <div className="fixed bottom-0 right-8 z-50 w-80 bg-zinc-900 border border-zinc-800/60 rounded-t-md border-b-0 shadow-none flex flex-col overflow-hidden">
@@ -60,9 +60,26 @@ export const UploadManager = () => {
                 <div className="w-5 shrink-0 flex items-center justify-end">
                   {item.status === 'complete' && <CheckCircle size={14} className="text-emerald-500" />}
                   {item.status === 'error' && <AlertCircle size={14} className="text-red-500" />}
-                  {item.status === 'uploading' && <Loader2 size={14} className="text-accent animate-spin" />}
                   {item.status === 'processing' && <Loader2 size={14} className="text-blue-400 animate-spin" />}
-                  {item.status === 'pending' && <Clock size={14} className="text-zinc-500" />}
+                  {(item.status === 'uploading' || item.status === 'pending') && (
+                    <button 
+                      onClick={() => cancelUpload(item.id)}
+                      className="group/cancel flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors"
+                      title="Cancel upload"
+                    >
+                      {item.status === 'uploading' ? (
+                        <>
+                          <Loader2 size={14} className="text-accent animate-spin group-hover/cancel:hidden" />
+                          <X size={14} className="hidden group-hover/cancel:block" />
+                        </>
+                      ) : (
+                        <>
+                          <Clock size={14} className="group-hover/cancel:hidden" />
+                          <X size={14} className="hidden group-hover/cancel:block" />
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
               

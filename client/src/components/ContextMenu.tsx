@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Edit3, FolderInput, Share, Link as LinkIcon, Download, Trash2, Info } from 'lucide-react';
+import { Edit3, FolderInput, Download, Trash2, Info } from 'lucide-react';
 import { useUIStore } from '../store/uiStore';
 import { useFileStore } from '../store/fileStore';
 import { useFiles, useDeleteFile } from '../hooks/useFiles';
@@ -108,12 +108,7 @@ export const ContextMenu = () => {
       
       <div className="h-px bg-zinc-800/80 my-1.5 mx-2" />
       
-      {!bulkMode && (
-        <>
-          <ContextMenuItem icon={Share} label="Share" onClick={() => handleAction(() => {})} />
-          <ContextMenuItem icon={LinkIcon} label="Copy Link" onClick={() => handleAction(() => {})} />
-        </>
-      )}
+
       
       <ContextMenuItem icon={Download} label={bulkMode ? `Download ${count} items` : "Download"} onClick={handleDownload} />
       

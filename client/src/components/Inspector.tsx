@@ -1,4 +1,4 @@
-import { Share, Download, Link as LinkIcon, Trash2, File, Edit3, FolderInput, X } from 'lucide-react';
+import { Download, Trash2, File, Edit3, FolderInput, X } from 'lucide-react';
 import { IconButton } from './IconButton';
 import { MetadataRow } from './MetadataRow';
 import { useFileStore } from '../store/fileStore';
@@ -107,8 +107,6 @@ export const Inspector = () => {
           <div className="p-4 border-t border-zinc-800/60 grid grid-cols-3 gap-2 shrink-0">
             <IconButton icon={Edit3} label="Rename" onClick={() => openRename(file.id, file.name)} />
             <IconButton icon={FolderInput} label="Move" onClick={() => openMove(file.id, file.name)} />
-            <IconButton icon={Share} label="Share" onClick={() => {}} />
-            <IconButton icon={LinkIcon} label="Copy Link" onClick={() => {}} />
             <IconButton icon={Download} label="Download" onClick={() => {}} />
             <IconButton 
               icon={Trash2} 

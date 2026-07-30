@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ConnectAccountModal } from '../components/ConnectAccountModal';
 import { UploadManager } from '../components/UploadManager';
 import { NewFolderModal } from '../components/NewFolderModal';
-import { SearchModal } from '../components/SearchModal';
+import { SearchOverlay } from '../components/SearchOverlay';
 import { RenameModal } from '../components/RenameModal';
 import { MoveModal } from '../components/MoveModal';
 import { useFileStore } from '../store/fileStore';
@@ -30,7 +30,7 @@ const MainLayout = () => {
       <ConnectAccountModal />
       <UploadManager />
       <NewFolderModal />
-      <SearchModal />
+      <SearchOverlay />
       <RenameModal />
       <MoveModal />
     </div>
