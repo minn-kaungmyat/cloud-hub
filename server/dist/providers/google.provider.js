@@ -14,7 +14,7 @@ const getGoogleOAuthClient = () => {
     return new googleapis_1.google.auth.OAuth2({
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        redirectUri: `${process.env.API_URL || 'http://localhost:3000'}/api/cloud-accounts/callback/google-drive`
+        redirectUri: `${process.env.API_URL}/api/cloud-accounts/callback/google-drive`
     });
 };
 exports.getGoogleOAuthClient = getGoogleOAuthClient;
@@ -25,7 +25,7 @@ const generateAuthUrl = (state) => {
         prompt: 'consent',
         scope: SCOPES,
         state,
-        redirect_uri: `${process.env.API_URL || 'http://localhost:3000'}/api/cloud-accounts/callback/google-drive`
+        redirect_uri: `${process.env.API_URL}/api/cloud-accounts/callback/google-drive`
     });
 };
 exports.generateAuthUrl = generateAuthUrl;
@@ -258,6 +258,26 @@ const uploadFile = async (accessToken, refreshToken, name, mimeType, filePath, p
         requestBody: fileMetadata,
         media: media,
         fields: 'id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe'
+    }).catch(async (error) => {
+        // If the token was expired, the googleapis library cannot auto-retry because the body is a stream.
+        // We must manually refresh the token, recreate the stream, and retry.
+        if (error.code === 401 || error.status === 401) {
+            if (!refreshToken)
+                throw error;
+            console.log('Access token expired during upload, refreshing and retrying...');
+            const { credentials } = await oAuth2Client.refreshAccessToken();
+            oAuth2Client.setCredentials(credentials);
+            const retryMedia = {
+                mimeType: mimeType,
+                body: fs_1.default.createReadStream(filePath),
+            };
+            return drive.files.create({
+                requestBody: fileMetadata,
+                media: retryMedia,
+                fields: 'id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe'
+            });
+        }
+        throw error;
     });
     return res.data;
 };

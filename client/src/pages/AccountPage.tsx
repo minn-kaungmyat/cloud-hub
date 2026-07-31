@@ -7,7 +7,7 @@ import { useUIStore } from '../store/uiStore';
 import { useFolderPath } from '../hooks/useFiles';
 import { useSearchParams } from 'react-router-dom';
 
-const DashboardPage = () => {
+const AccountPage = () => {
   const { viewMode, setViewMode } = useFileStore();
   const setDragOver = useUIStore((s) => s.setDragOver);
   
@@ -60,4 +60,4 @@ const DashboardPage = () => {
   );
 };
 
-export default DashboardPage;
+export default AccountPage;

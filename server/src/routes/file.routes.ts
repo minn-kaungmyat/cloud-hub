@@ -13,6 +13,7 @@ router.post('/sync/incremental/:accountId', fileController.incrementalSync);
 router.post('/upload/:accountId', upload.single('file'), fileController.uploadFile);
 router.get('/search', fileController.searchFiles);
 router.get('/folder/:folderId/path', fileController.getFolderPath);
+router.post('/browse', fileController.browseFiles);
 router.get('/', fileController.getFiles);
 router.post('/folder', fileController.createFolder);
 router.post('/folders/batch', fileController.createFoldersBatch);

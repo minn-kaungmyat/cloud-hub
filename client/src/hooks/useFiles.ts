@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tansta
 import { api } from '../utils/api';
 import type { CloudFile } from '../types';
 
-interface FilesResponse {
+export interface FilesResponse {
   files: CloudFile[];
   nextCursor: string | null;
 }
@@ -126,4 +126,46 @@ export const useDeleteFile = () => {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
     }
   });
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const useAdvancedBrowse = (filters: any) => {
+  return useInfiniteQuery<FilesResponse>({
+    queryKey: ['browse', filters],
+    queryFn: async ({ pageParam }) => {
+      const params: Record<string, string | number | unknown> = { limit: 50 };
+      if (pageParam) params.cursor = pageParam;
+      
+      const res = await api.post('/api/files/browse', filters, { params });
+      return res.data.data;
+    },
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+};
+
+export const useFileFromCache = (fileId: string | null) => {
+  const queryClient = useQueryClient();
+  
+  if (!fileId) return null;
+
+  // Search through all queries that might contain files
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fileQueries = queryClient.getQueriesData<any>({ 
+    predicate: (query) => {
+      const key = query.queryKey[0] as string;
+      return ['files', 'search', 'browse'].includes(key);
+    }
+  });
+
+  for (const [, data] of fileQueries) {
+    if (!data || !data.pages) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allFiles = data.pages.flatMap((p: any) => p.files);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const found = allFiles.find((f: any) => f.id === fileId);
+    if (found) return found as CloudFile;
+  }
+  
+  return null;
 };

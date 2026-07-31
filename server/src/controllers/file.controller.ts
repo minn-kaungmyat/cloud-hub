@@ -46,6 +46,20 @@ export class FileController {
     });
   });
 
+  browseFiles = asyncHandler(async (req: Request, res: Response) => {
+    const filters = req.body;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+    const cursor = req.query.cursor as string | undefined;
+    const userId = req.user!.id;
+    
+    const result = await fileService.advancedBrowse(userId, filters, limit, cursor);
+    
+    res.status(200).json({
+      status: 'success',
+      data: result
+    });
+  });
+
   searchFiles = asyncHandler(async (req: Request, res: Response) => {
     const accountId = req.query.accountId as string | undefined;
     const query = req.query.q as string;

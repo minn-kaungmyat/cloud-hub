@@ -201,6 +201,7 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
           queryClient.invalidateQueries({ queryKey: ['files'] });
           queryClient.invalidateQueries({ queryKey: ['folders'] });
           
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
           console.error(error);
           let errorMsg = 'Upload failed';

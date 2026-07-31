@@ -320,6 +320,101 @@ export class FileService {
     };
   }
 
+  async advancedBrowse(userId: string, filters: any, limit: number = 50, cursor?: string) {
+    // 1. Get user's cloud accounts to ensure they only query their own files
+    const accounts = await prisma.cloudAccount.findMany({
+      where: { userId },
+      select: { id: true, provider: true },
+    });
+    
+    if (accounts.length === 0) {
+      return { files: [], nextCursor: null };
+    }
+    
+    const accountIds = accounts.map(a => a.id);
+    let whereClause: any = {
+      cloudAccountId: { in: accountIds },
+    };
+
+    // 2. Filter by Type
+    if (filters.type) {
+      if (filters.type === 'image') {
+        whereClause.mimeType = { startsWith: 'image/' };
+      } else if (filters.type === 'video') {
+        whereClause.mimeType = { startsWith: 'video/' };
+      } else if (filters.type === 'audio') {
+        whereClause.mimeType = { startsWith: 'audio/' };
+      } else if (filters.type === 'document') {
+        whereClause.mimeType = { 
+          in: [
+            'application/pdf', 
+            'application/msword', 
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'text/plain'
+          ] 
+        };
+      }
+    }
+
+    // 3. Filter by Provider
+    if (filters.providers && filters.providers.length > 0) {
+      whereClause.provider = { in: filters.providers };
+    }
+
+    // 4. Handle Account Inclusions & Exclusions
+    let validAccountIds = [...accountIds];
+    if (filters.includeAccounts && filters.includeAccounts.length > 0) {
+      validAccountIds = validAccountIds.filter(id => filters.includeAccounts.includes(id));
+    }
+    if (filters.excludeAccounts && filters.excludeAccounts.length > 0) {
+      validAccountIds = validAccountIds.filter(id => !filters.excludeAccounts.includes(id));
+    }
+    
+    if (validAccountIds.length === 0) {
+      return { files: [], nextCursor: null }; // Excluded everything
+    }
+    whereClause.cloudAccountId.in = validAccountIds;
+
+    // We only want files in browse mode, not folders (usually, or we can make it optional)
+    // Actually, DAMs usually show files. We will filter out folders unless requested.
+    whereClause.isFolder = false;
+
+    // 5. Determine Sorting
+    let orderByClause: any = { modifiedTime: 'desc' }; // default
+    if (filters.sortBy === 'date') orderByClause = { modifiedTime: filters.sortOrder || 'desc' };
+    if (filters.sortBy === 'size') orderByClause = { size: filters.sortOrder || 'desc' };
+    if (filters.sortBy === 'name') orderByClause = { name: filters.sortOrder || 'asc' };
+
+    // 6. Execute Query
+    const files = await prisma.file.findMany({
+      where: whereClause,
+      take: limit + 1,
+      skip: cursor ? 1 : 0,
+      cursor: cursor ? { id: cursor } : undefined,
+      orderBy: orderByClause,
+    });
+
+    let nextCursor: string | null = null;
+    if (files.length > limit) {
+      const nextItem = files.pop();
+      nextCursor = nextItem!.id;
+    }
+
+    return {
+      files: files.map(f => ({
+        ...f,
+        size: Number(f.size),
+        isFavorite: false,
+        tags: [],
+      })),
+      nextCursor
+    };
+  }
+
   async searchFiles(cloudAccountId: string | undefined, userId: string, query: string, limit: number = 50, cursor?: string) {
     const accountFilter = cloudAccountId ? { id: cloudAccountId, userId } : { userId };
     

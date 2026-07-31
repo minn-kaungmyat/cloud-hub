@@ -37,7 +37,9 @@ export const Breadcrumb = ({ segments, onNavigate }: BreadcrumbProps) => (
                   const event = new CustomEvent('move-file', { detail: { fileIds: [data.id], targetFolderId: segment.id, targetFolderName: segment.label } });
                   window.dispatchEvent(event);
                 }
-              } catch { }
+              } catch { 
+                // Ignore parse errors from drag payload
+              }
             }}
             className={`truncate cursor-pointer transition-colors ${
               isLast

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Clock, Star, FileSearch, RefreshCw } from 'lucide-react';
+import { Clock, Star, FileSearch, RefreshCw, Home } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { SidebarItem } from './SidebarItem';
 import { SidebarSection } from './SidebarSection';
@@ -22,10 +22,10 @@ export const Sidebar = () => {
     if (location.pathname === '/' && accounts.length > 0) {
       const validCollections = ['recent', 'favorites', 'large-files'];
       if (!validCollections.includes(activeItem) && !accounts.some(a => a.id === activeItem)) {
-        setSearchParams({ account: accounts[0].id });
+        navigate('/browse', { replace: true });
       }
     }
-  }, [location.pathname, accounts, activeItem, setSearchParams]);
+  }, [location.pathname, accounts, activeItem, setSearchParams, navigate]);
 
   return (
     <aside className="w-[260px] flex flex-col border-r border-zinc-800/60 bg-zinc-950 shrink-0">
@@ -41,6 +41,13 @@ export const Sidebar = () => {
 
       {/* Nav sections */}
       <div className="flex-1 overflow-y-auto py-3">
+        <SidebarItem
+          icon={<Home size={14} />}
+          label="Home"
+          active={location.pathname === '/browse'}
+          onClick={() => navigate('/browse')}
+        />
+
         <SidebarSection label="Locations" />
         {isLoading ? (
           <div className="px-4 py-2 text-xs text-zinc-500">Loading accounts...</div>

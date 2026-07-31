@@ -29,14 +29,14 @@ class CloudAccountController {
             res.redirect(authUrl);
         }
         catch (err) {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+            const frontendUrl = process.env.FRONTEND_URL;
             res.redirect(`${frontendUrl}/settings?error=invalid_token`);
         }
     });
     callback = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         const { provider } = req.params;
         const { code, state, error } = req.query;
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const frontendUrl = process.env.FRONTEND_URL;
         if (error) {
             return res.redirect(`${frontendUrl}/settings?error=access_denied`);
         }

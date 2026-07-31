@@ -2,18 +2,14 @@ import { useEffect, useRef } from 'react';
 import { Edit3, FolderInput, Download, Trash2, Info } from 'lucide-react';
 import { useUIStore } from '../store/uiStore';
 import { useFileStore } from '../store/fileStore';
-import { useFiles, useDeleteFile } from '../hooks/useFiles';
+import { useDeleteFile, useFileFromCache } from '../hooks/useFiles';
 import { useAuthStore } from '../store/authStore';
-import { useSearchParams } from 'react-router-dom';
+
 
 export const ContextMenu = () => {
   const { contextMenuOpen, contextMenuPosition, contextMenuFileId, setContextMenu, openRename, openMove, openConfirm } = useUIStore();
   const { toggleInspector, clearSelection, bulkMode, selectedFileIds } = useFileStore();
-  const [searchParams] = useSearchParams();
-  const activeAccount = searchParams.get('account') || 'google-drive';
-  const accountId = ['recent', 'favorites', 'large-files'].includes(activeAccount) ? undefined : activeAccount;
-  const folderId = searchParams.get('folder') || 'root';
-  const { data } = useFiles(accountId, folderId);
+  const file = useFileFromCache(contextMenuFileId);
   const { mutateAsync: deleteFileAsync } = useDeleteFile();
   const { token } = useAuthStore();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -38,8 +34,6 @@ export const ContextMenu = () => {
 
   if (!contextMenuOpen || !contextMenuFileId) return null;
 
-  const files = data?.pages.flatMap(p => p.files) ?? [];
-  const file = files.find(f => f.id === contextMenuFileId);
   if (!file) return null;
 
   // Ensure menu doesn't flow off screen
@@ -57,21 +51,15 @@ export const ContextMenu = () => {
   const handleDownload = () => {
     if (!token) return;
     const targetIds = bulkMode ? selectedFileIds : (file ? [file.id] : []);
-    const targetFiles = data?.pages.flatMap(p => p.files).filter(f => targetIds.includes(f.id)) || [];
-
-    targetFiles.forEach((f) => {
-      const url = `${import.meta.env.VITE_API_URL}/api/files/${f.id}/download?token=${token}`;
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = url;
-      document.body.appendChild(iframe);
-      
-      // Clean up iframe after download starts
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 5000);
+    
+    // Fallback: If downloading multiple files, we should probably resolve them all via cache if possible,
+    // but for now, ContextMenu is usually initiated from a view where the file exists.
+    // If bulk mode is active, we just download the selected file IDs. 
+    // We don't necessarily need the full CloudFile object for download since backend might just take IDs.
+    // However, the current logic uses targetFiles to open windows. Let's fix that.
+    
+    targetIds.forEach(id => {
+      window.open(`/api/files/${id}/download?token=${token}`, '_blank');
     });
     
     setContextMenu(false);

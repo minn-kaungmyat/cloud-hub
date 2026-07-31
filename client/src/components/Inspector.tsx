@@ -4,33 +4,26 @@ import { MetadataRow } from './MetadataRow';
 import { useFileStore } from '../store/fileStore';
 import { useUIStore } from '../store/uiStore';
 import { useCloudAccounts } from '../hooks/useCloudAccounts';
-import { useFiles, useDeleteFile } from '../hooks/useFiles';
+import { useDeleteFile, useFileFromCache } from '../hooks/useFiles';
 import { ProviderIcon, getProviderLabel } from './ProviderIcon';
 import { StatusBadge } from './StatusBadge';
 import { useAuthStore } from '../store/authStore';
 import { FileIcon } from './FileRow';
 import { formatFileSize, formatDate, formatMimeType } from '../utils/format';
-import { useSearchParams } from 'react-router-dom';
+
 
 export const Inspector = () => {
-  const { selectedFileId, toggleInspector } = useFileStore();
+  const { selectedFileId, toggleInspector, inspectorOpen } = useFileStore();
   const { openRename, openMove, openConfirm } = useUIStore();
   const { data: accounts = [] } = useCloudAccounts();
   const token = useAuthStore((state) => state.token);
-  const [searchParams] = useSearchParams();
-  const activeAccount = searchParams.get('account') || 'google-drive';
-  const accountId = ['recent', 'favorites', 'large-files'].includes(activeAccount) ? undefined : activeAccount;
-  const folderId = searchParams.get('folder') || 'root';
-  const { data } = useFiles(accountId, folderId);
+  const file = useFileFromCache(selectedFileId);
   const { mutate: deleteFile } = useDeleteFile();
-  const files = data?.pages.flatMap(p => p.files) ?? [];
-  
-  const file = files.find((f) => f.id === selectedFileId);
   const account = file ? accounts.find(a => a.id === file.cloudAccountId) : null;
 
   return (
-    <aside className="w-[320px] flex flex-col border-l border-zinc-800/60 bg-zinc-900/40 shrink-0">
-      <div className="h-12 flex items-center justify-between px-4 border-b border-zinc-800/60 font-medium text-sm text-zinc-200">
+    <aside className={`flex flex-col border-zinc-800/60 bg-zinc-950 shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${inspectorOpen ? 'w-[320px] border-l opacity-100' : 'w-0 border-transparent opacity-0'}`}>
+      <div className="h-12 flex items-center justify-between px-4 border-b border-zinc-800/60 font-medium text-sm text-zinc-200 w-[320px] shrink-0">
         Inspector
         <button onClick={toggleInspector} className="text-zinc-500 hover:text-zinc-300">
           <X size={16} />
@@ -38,13 +31,13 @@ export const Inspector = () => {
       </div>
 
       {!file ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 w-[320px]">
           <File size={32} className="mb-4 text-zinc-700" />
           <p className="text-sm">Select a file or folder to view its details</p>
         </div>
       ) : (
         <>
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4 w-[320px]">
             {/* Preview thumbnail */}
             <div className="aspect-video bg-zinc-950/50 rounded-sm mb-4 border border-zinc-800/60 flex items-center justify-center overflow-hidden">
               {file.hasThumbnail ? (

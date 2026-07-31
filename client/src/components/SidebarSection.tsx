@@ -3,7 +3,5 @@ export interface SidebarSectionProps {
 }
 
 export const SidebarSection = ({ label }: SidebarSectionProps) => (
-  <div className="px-4 mt-6 mb-2 first:mt-0 text-[11px] font-semibold text-zinc-500 uppercase tracking-wider select-none">
-    {label}
-  </div>
+  <div className="h-px bg-zinc-800/60 my-3 mx-4" aria-label={label} />
 );

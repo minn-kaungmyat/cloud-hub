@@ -70,6 +70,17 @@ class FileController {
             data: result
         });
     });
+    browseFiles = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+        const filters = req.body;
+        const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
+        const cursor = req.query.cursor;
+        const userId = req.user.id;
+        const result = await file_service_1.fileService.advancedBrowse(userId, filters, limit, cursor);
+        res.status(200).json({
+            status: 'success',
+            data: result
+        });
+    });
     searchFiles = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         const accountId = req.query.accountId;
         const query = req.query.q;
@@ -108,8 +119,13 @@ class FileController {
                     'Authorization': `Bearer ${accessToken}`
                 }
             });
+            // If Google fails to return a thumbnail (e.g. 404), return a 204 No Content.
+            // Throwing a 404 AppError here causes global error logging, which triggers 
+            // Cloudflare's DDoS brute-force protection if many thumbnails fail at once,
+            // leading to temporary IP bans.
             if (!response.ok) {
-                throw new AppError_1.AppError(`Failed to fetch thumbnail from Google: ${response.statusText}`, response.status);
+                res.status(204).end();
+                return;
             }
             const contentType = response.headers.get('content-type');
             if (contentType) {
@@ -120,9 +136,8 @@ class FileController {
             res.send(Buffer.from(arrayBuffer));
         }
         catch (error) {
-            if (error instanceof AppError_1.AppError)
-                throw error;
-            throw new AppError_1.AppError('Failed to load thumbnail', 500);
+            // Fail silently for thumbnails to prevent IP bans
+            res.status(204).end();
         }
     });
     renameFile = (0, asyncHandler_1.asyncHandler)(async (req, res) => {

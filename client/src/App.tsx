@@ -4,10 +4,11 @@ import { Toaster } from 'sonner';
 import { useAuthStore } from './store/authStore';
 import { api } from './utils/api';
 import MainLayout from './layouts/MainLayout';
-import DashboardPage from './pages/DashboardPage';
+import AccountPage from './pages/AccountPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import HomePage from './pages/HomePage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 const router = createBrowserRouter([
@@ -27,13 +28,17 @@ const router = createBrowserRouter([
         path: '',
         element: <MainLayout />,
         children: [
-      {
-        index: true,
-        element: <DashboardPage />,
-      },
+          {
+            index: true,
+            element: <AccountPage />,
+          },
           {
             path: 'settings',
             element: <SettingsPage />,
+          },
+          {
+            path: 'browse',
+            element: <HomePage />,
           },
         ],
       },

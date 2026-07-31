@@ -67,7 +67,7 @@ export const FileList = () => {
         }
       });
     }
-  }, [scrollToId, status]);
+  }, [scrollToId, status, clearSelection]);
 
   const displayedFiles = React.useMemo(() => {
     if (!data) return [];
@@ -104,8 +104,8 @@ export const FileList = () => {
     };
     
     window.addEventListener('move-file', handleMove);
-    return () => window.removeEventListener('move-file', handleMove);
-  }, [moveFileAsync, displayedFiles]);
+    return () => window.removeEventListener('move-file', handleMove as EventListener);
+  }, [moveFileAsync, displayedFiles, clearSelection]);
 
   const { multiSelect } = useFileStore();
 

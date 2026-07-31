@@ -14,9 +14,11 @@ export const NewFolderModal = () => {
 
   // Reset name when modal opens
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
     if (newFolderOpen) {
-      setName('');
+      timeout = setTimeout(() => setName(''), 0);
     }
+    return () => clearTimeout(timeout);
   }, [newFolderOpen]);
 
   if (!newFolderOpen) return null;

@@ -9,9 +9,10 @@ export interface CommandBarProps {
   viewMode: ViewMode;
   onNavigate: (segmentId: string) => void;
   onViewModeChange: (mode: ViewMode) => void;
+  rightSlot?: React.ReactNode;
 }
 
-export const CommandBar = ({ segments, viewMode, onNavigate, onViewModeChange }: CommandBarProps) => {
+export const CommandBar = ({ segments, viewMode, onNavigate, onViewModeChange, rightSlot }: CommandBarProps) => {
   const { setSearchOpen } = useUIStore();
 
   return (
@@ -51,6 +52,7 @@ export const CommandBar = ({ segments, viewMode, onNavigate, onViewModeChange }:
             <LayoutGrid size={14} />
           </button>
         </div>
+        {rightSlot}
       </div>
     </header>
   );

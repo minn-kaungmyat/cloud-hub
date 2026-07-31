@@ -68,7 +68,9 @@ export const FolderCard = ({ file, selected, onClick, onDoubleClick }: FolderCar
             const event = new CustomEvent('move-file', { detail: { fileIds: [data.id], targetFolderId: file.id } });
             window.dispatchEvent(event);
           }
-        } catch { }
+        } catch { 
+          // Ignore parse errors from drag payload
+        }
       }}
       className={`
         relative group flex flex-row items-center gap-4 px-4 py-3 rounded-md cursor-pointer border transition-all duration-200

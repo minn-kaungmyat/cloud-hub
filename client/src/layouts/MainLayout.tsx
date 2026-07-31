@@ -9,10 +9,9 @@ import { NewFolderModal } from '../components/NewFolderModal';
 import { SearchOverlay } from '../components/SearchOverlay';
 import { RenameModal } from '../components/RenameModal';
 import { MoveModal } from '../components/MoveModal';
-import { useFileStore } from '../store/fileStore';
+
 
 const MainLayout = () => {
-  const inspectorOpen = useFileStore((s) => s.inspectorOpen);
 
   return (
     <div className="flex h-screen w-full bg-zinc-950 text-zinc-300 overflow-hidden font-sans">
@@ -22,7 +21,7 @@ const MainLayout = () => {
         <Outlet />
       </main>
 
-      {inspectorOpen && <Inspector />}
+      <Inspector />
       <ContextMenu />
 
       {/* Global Modals */}
