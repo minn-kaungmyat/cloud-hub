@@ -59,6 +59,8 @@ model File {
   mimeType         String   @map("mime_type")
   size             BigInt
   parentId         String?  @map("parent_id")
+  parent           File?    @relation("FileHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children         File[]   @relation("FileHierarchy")
   modifiedTime     DateTime @map("modified_time")
   hasThumbnail     Boolean  @default(false) @map("has_thumbnail")
   isFolder         Boolean  @default(false) @map("is_folder")
