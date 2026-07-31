@@ -124,7 +124,7 @@ export class FileService {
               });
             }
           }
-        }, { timeout: 30000 });
+        }, { timeout: 120000 });
 
         // Mark as completed and save start page token
         const syncToken = await getStartPageToken(account.accessToken, account.refreshToken);
