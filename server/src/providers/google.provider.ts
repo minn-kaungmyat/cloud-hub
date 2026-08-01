@@ -89,7 +89,9 @@ export class GoogleDriveProvider implements ICloudProvider {
       fields: 'thumbnailLink'
     });
     
-    return res.data.thumbnailLink || null;
+    const link = res.data.thumbnailLink;
+    if (!link) return null;
+    return link.replace(/=s\d+$/, '') + '=s512';
   }
 
   async getDriveQuota(accessToken: string, refreshToken: string | null) {

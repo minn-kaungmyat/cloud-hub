@@ -172,12 +172,13 @@ export class OneDriveProvider implements ICloudProvider {
   }
 
   async getThumbnailLink(accessToken: string, refreshToken: string | null, fileId: string) {
-    const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/thumbnails`, {}, accessToken, refreshToken);
+    const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/thumbnails?select=c512x512,medium,large`, {}, accessToken, refreshToken);
     if (!res.ok) return null;
     
     const data = await res.json();
     if (data.value && data.value.length > 0) {
-      return data.value[0].large?.url || data.value[0].medium?.url || data.value[0].small?.url || null;
+      const thumb = data.value[0];
+      return thumb['c512x512']?.url || thumb.medium?.url || thumb.large?.url || null;
     }
     return null;
   }

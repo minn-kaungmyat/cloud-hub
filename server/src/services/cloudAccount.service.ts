@@ -51,10 +51,9 @@ export class CloudAccountService {
   async getAccounts(userId: string) {
     return prisma.cloudAccount.findMany({
       where: { userId },
-      orderBy: [
-        { provider: 'asc' },
-        { createdAt: 'asc' }
-      ],
+      orderBy: {
+        createdAt: 'asc'
+      },
     });
   }
 

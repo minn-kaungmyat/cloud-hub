@@ -115,7 +115,7 @@ export class CloudAccountController {
         id: acc.id,
         provider: acc.provider,
         email: acc.email,
-        label: acc.provider === 'google-drive' ? 'Google Drive' : acc.provider === 'onedrive' ? 'OneDrive' : acc.provider,
+        label: acc.provider === 'google-drive' ? 'Google Drive' : acc.provider === 'onedrive' ? 'OneDrive' : acc.provider === 'dropbox' ? 'Dropbox' : acc.provider,
         storageUsed: acc.storageUsed ? Number(acc.storageUsed) : 0,
         storageTotal: acc.storageTotal ? Number(acc.storageTotal) : 15 * 1024 * 1024 * 1024,
         status,

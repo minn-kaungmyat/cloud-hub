@@ -72,7 +72,7 @@ export const FileCard = ({ file, selected, onClick, onDoubleClick }: FileCardPro
       <div className="w-full aspect-video flex items-center justify-center bg-zinc-950/50 overflow-hidden relative">
         {file.hasThumbnail ? (
           <img 
-            src={`${import.meta.env.VITE_API_URL}/api/files/${file.id}/thumbnail?token=${token}`} 
+            src={`${import.meta.env.VITE_API_URL}/api/files/${file.id}/thumbnail?token=${token}&v=2`} 
             alt={file.name} 
             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
           />

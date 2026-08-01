@@ -39,10 +39,9 @@ class CloudAccountService {
     async getAccounts(userId) {
         return prisma_1.prisma.cloudAccount.findMany({
             where: { userId },
-            orderBy: [
-                { provider: 'asc' },
-                { createdAt: 'asc' }
-            ],
+            orderBy: {
+                createdAt: 'asc'
+            },
         });
     }
     async deleteAccount(id, userId) {

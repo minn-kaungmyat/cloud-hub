@@ -145,7 +145,13 @@ class OneDriveProvider {
             size: item.size,
             parents: item.parentReference?.id ? [item.parentReference.id] : undefined,
             modifiedTime: item.lastModifiedDateTime,
-            thumbnailLink: null, // Microsoft Graph requires a separate call for thumbnails
+            thumbnailLink: (item.file?.mimeType?.startsWith('image/') ||
+                item.file?.mimeType?.startsWith('video/') ||
+                item.file?.mimeType === 'application/pdf' ||
+                item.file?.mimeType?.includes('word') ||
+                item.file?.mimeType?.includes('presentation') ||
+                item.file?.mimeType?.includes('excel') ||
+                item.file?.mimeType?.includes('officedocument')) ? 'has_thumbnail' : null,
             trashed: false,
             ownedByMe: true // Graph API typically returns user's own items
         };
@@ -157,8 +163,8 @@ class OneDriveProvider {
             throw new Error('Failed to fetch OneDrive root');
         const rootData = await rootRes.json();
         const rootFolderId = rootData.id;
-        let url = 'https://graph.microsoft.com/v1.0/me/drive/root/search(q=\'\')?select=id,name,file,folder,size,parentReference,lastModifiedDateTime';
-        const allFiles = [];
+        let url = 'https://graph.microsoft.com/v1.0/me/drive/root/delta?select=id,name,file,folder,size,parentReference,lastModifiedDateTime,deleted';
+        const allFilesMap = new Map();
         while (url) {
             const res = await this.fetchGraph(url, {}, accessToken, refreshToken);
             if (!res.ok) {
@@ -167,19 +173,27 @@ class OneDriveProvider {
             }
             const data = await res.json();
             if (data.value) {
-                allFiles.push(...data.value.map((item) => this.mapGraphFileToGeneric(item)));
+                for (const item of data.value) {
+                    if (item.deleted) {
+                        allFilesMap.delete(item.id);
+                    }
+                    else {
+                        allFilesMap.set(item.id, this.mapGraphFileToGeneric(item));
+                    }
+                }
             }
             url = data['@odata.nextLink'] || '';
         }
-        return { files: allFiles, rootFolderId };
+        return { files: Array.from(allFilesMap.values()), rootFolderId };
     }
     async getThumbnailLink(accessToken, refreshToken, fileId) {
-        const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/thumbnails`, {}, accessToken, refreshToken);
+        const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/thumbnails?select=c256x256,medium,large`, {}, accessToken, refreshToken);
         if (!res.ok)
             return null;
         const data = await res.json();
         if (data.value && data.value.length > 0) {
-            return data.value[0].large?.url || data.value[0].medium?.url || data.value[0].small?.url || null;
+            const thumb = data.value[0];
+            return thumb['c256x256']?.url || thumb.medium?.url || thumb.large?.url || null;
         }
         return null;
     }

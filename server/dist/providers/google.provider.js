@@ -79,7 +79,10 @@ class GoogleDriveProvider {
             fileId,
             fields: 'thumbnailLink'
         });
-        return res.data.thumbnailLink || null;
+        const link = res.data.thumbnailLink;
+        if (!link)
+            return null;
+        return link.replace(/=s\d+$/, '') + '=s256';
     }
     async getDriveQuota(accessToken, refreshToken) {
         const oAuth2Client = this.getGoogleOAuthClient();

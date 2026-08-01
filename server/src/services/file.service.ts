@@ -182,10 +182,12 @@ export class FileService {
               const providerFileId = change.fileId;
               
               if (change.removed || (change.file && change.file.trashed)) {
-                await tx.file.deleteMany({
-                  where: { cloudAccountId: account.id, providerFileId }
-                });
-                validIds.delete(providerFileId);
+                if (providerFileId) {
+                  await tx.file.deleteMany({
+                    where: { cloudAccountId: account.id, providerFileId }
+                  });
+                  validIds.delete(providerFileId);
+                }
               } else if (change.file) {
                 const f = change.file;
                 

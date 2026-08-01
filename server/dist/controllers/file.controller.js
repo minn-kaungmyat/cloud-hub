@@ -78,10 +78,20 @@ class FileController {
         const userId = req.user.id;
         const result = await file_service_1.fileService.getThumbnailUrl(id, userId);
         if (!result) {
-            throw new AppError_1.AppError('Thumbnail not found', 404);
+            res.status(204).end();
+            return;
         }
         const { url, accessToken } = result;
         try {
+            if (url.startsWith('data:')) {
+                const parts = url.split(',');
+                const contentType = parts[0].split(':')[1].split(';')[0];
+                const buffer = Buffer.from(parts[1], 'base64');
+                res.setHeader('Content-Type', contentType);
+                res.setHeader('Cache-Control', 'public, max-age=86400');
+                res.send(buffer);
+                return;
+            }
             const response = await fetch(url, {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`

@@ -13,7 +13,7 @@ export const ConnectAccountModal = () => {
   const { token } = useAuthStore();
 
   const handleConnect = (providerId: string) => {
-    if (providerId === 'google-drive' || providerId === 'onedrive') {
+    if (providerId === 'google-drive' || providerId === 'onedrive' || providerId === 'dropbox') {
       window.location.assign(`${import.meta.env.VITE_API_URL}/api/cloud-accounts/auth/${providerId}?token=${token}`);
     } else {
       // Placeholder for others
