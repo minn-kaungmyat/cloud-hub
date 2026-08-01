@@ -1,3 +1,4 @@
+import { decryptToken } from '../utils/crypto';
 import { prisma } from '../database/prisma';
 import fs from 'fs';
 import { ProviderFactory } from '../providers/provider.factory';
@@ -14,7 +15,7 @@ export class FileService {
       throw new AppError('Cloud account not found', 404);
     }
 
-    if (!account.accessToken) throw new AppError('Account not authenticated', 401);
+    if (!decryptToken(account.accessToken)) throw new AppError('Account not authenticated', 401);
 
     if (account.syncStatus === 'syncing') {
       return { count: 0, message: 'Sync already in progress' };
@@ -30,10 +31,10 @@ export class FileService {
         });
 
         // Fetch from Provider
-        const { files: driveFiles, rootFolderId } = await provider.listFiles(account.accessToken!, account.refreshToken);
+        const { files: driveFiles, rootFolderId } = await provider.listFiles(decryptToken(account.accessToken)!, decryptToken(account.refreshToken));
 
         try {
-          const quota = await provider.getDriveQuota(account.accessToken!, account.refreshToken);
+          const quota = await provider.getDriveQuota(decryptToken(account.accessToken)!, decryptToken(account.refreshToken));
           if (quota) {
             await prisma.cloudAccount.update({
               where: { id: account.id },
@@ -125,7 +126,7 @@ export class FileService {
         }, { timeout: 120000 });
 
         // Mark as completed and save start page token
-        const syncToken = await provider.getStartPageToken(account.accessToken!, account.refreshToken);
+        const syncToken = await provider.getStartPageToken(decryptToken(account.accessToken)!, decryptToken(account.refreshToken));
 
         await prisma.cloudAccount.update({
           where: { id: account.id },
@@ -158,7 +159,7 @@ export class FileService {
 
     if (!account) throw new AppError('Cloud account not found', 404);
 
-    if (!account.accessToken) throw new AppError('Account not authenticated', 401);
+    if (!decryptToken(account.accessToken)) throw new AppError('Account not authenticated', 401);
 
     if (account.syncStatus === 'syncing') {
       return { count: 0, message: 'Sync already in progress' };
@@ -168,7 +169,7 @@ export class FileService {
 
     try {
       const provider = ProviderFactory.getProvider(account.provider);
-      const { changes, newStartPageToken } = await provider.listChanges(account.accessToken!, account.refreshToken, account.syncToken);
+      const { changes, newStartPageToken } = await provider.listChanges(decryptToken(account.accessToken)!, decryptToken(account.refreshToken), account.syncToken);
 
         if (changes.length > 0) {
           const existingFiles = await prisma.file.findMany({
@@ -483,16 +484,16 @@ export class FileService {
       return null;
     }
 
-    if (!file.cloudAccount.accessToken) return null;
+    if (!file.decryptToken(cloudAccount.accessToken)) return null;
 
     const provider = ProviderFactory.getProvider(file.provider);
-    let url = await provider.getThumbnailLink(file.cloudAccount.accessToken, file.cloudAccount.refreshToken, file.providerFileId);
+    let url = await provider.getThumbnailLink(file.decryptToken(cloudAccount.accessToken), file.decryptToken(cloudAccount.refreshToken), file.providerFileId);
     
     if (url) {
       if (file.provider === 'google-drive') {
         url = url.replace(/=s\d+$/, '=s512');
       }
-      return { url, accessToken: file.cloudAccount.accessToken };
+      return { url, accessToken: file.decryptToken(cloudAccount.accessToken) };
     }
 
     return null;
@@ -515,7 +516,7 @@ export class FileService {
 
     const { cloudAccount } = file;
 
-    if (!cloudAccount.accessToken) {
+    if (!decryptToken(cloudAccount.accessToken)) {
       throw new AppError('Account not authenticated', 401);
     }
     
@@ -524,8 +525,8 @@ export class FileService {
     let updatedDriveFile;
     try {
       updatedDriveFile = await provider.renameFile(
-        cloudAccount.accessToken,
-        cloudAccount.refreshToken,
+        decryptToken(cloudAccount.accessToken),
+        decryptToken(cloudAccount.refreshToken),
         file.providerFileId,
         newName
       );
@@ -566,7 +567,7 @@ export class FileService {
 
     const { cloudAccount } = file;
 
-    if (!cloudAccount.accessToken) {
+    if (!decryptToken(cloudAccount.accessToken)) {
       throw new AppError('Account not authenticated', 401);
     }
     
@@ -597,8 +598,8 @@ export class FileService {
     try {
       const provider = ProviderFactory.getProvider(cloudAccount.provider);
       const streamResponse = await provider.downloadFileStream(
-        cloudAccount.accessToken,
-        cloudAccount.refreshToken,
+        decryptToken(cloudAccount.accessToken),
+        decryptToken(cloudAccount.refreshToken),
         file.providerFileId,
         file.mimeType
       );
@@ -657,15 +658,15 @@ export class FileService {
       targetProviderId = targetFolder.providerFileId;
     }
 
-    if (!cloudAccount.accessToken) {
+    if (!decryptToken(cloudAccount.accessToken)) {
       throw new AppError('Account not authenticated', 401);
     }
     
     try {
       const provider = ProviderFactory.getProvider(cloudAccount.provider);
       const updatedDriveFile = await provider.moveFile(
-        cloudAccount.accessToken,
-        cloudAccount.refreshToken,
+        decryptToken(cloudAccount.accessToken),
+        decryptToken(cloudAccount.refreshToken),
         file.providerFileId,
         targetProviderId
       );
@@ -697,7 +698,7 @@ export class FileService {
     });
 
     if (!account) throw new AppError('Cloud account not found', 404);
-    if (!account.accessToken) throw new AppError('Account not authenticated', 401);
+    if (!decryptToken(account.accessToken)) throw new AppError('Account not authenticated', 401);
 
     try {
       let targetProviderId = 'root';
@@ -711,8 +712,8 @@ export class FileService {
 
       const provider = ProviderFactory.getProvider(account.provider);
       const driveFolder = await provider.createFolder(
-        account.accessToken,
-        account.refreshToken,
+        decryptToken(account.accessToken),
+        decryptToken(account.refreshToken),
         folderName,
         targetProviderId
       );
@@ -749,7 +750,7 @@ export class FileService {
     });
 
     if (!account) throw new AppError('Cloud account not found', 404);
-    if (!account.accessToken) throw new AppError('Account not authenticated', 401);
+    if (!decryptToken(account.accessToken)) throw new AppError('Account not authenticated', 401);
 
     let targetRootProviderId = 'root';
     if (parentProviderId !== 'root') {
@@ -803,8 +804,8 @@ export class FileService {
       try {
         const provider = ProviderFactory.getProvider(account.provider);
         const driveFolder = await provider.createFolder(
-          account.accessToken,
-          account.refreshToken,
+          decryptToken(account.accessToken),
+          decryptToken(account.refreshToken),
           folderName,
           parentProviderId
         );
@@ -853,15 +854,15 @@ export class FileService {
 
     const { cloudAccount } = file;
 
-    if (!cloudAccount.accessToken) {
+    if (!decryptToken(cloudAccount.accessToken)) {
       throw new AppError('Account not authenticated', 401);
     }
     
     try {
       const provider = ProviderFactory.getProvider(cloudAccount.provider);
       await provider.trashFile(
-        cloudAccount.accessToken,
-        cloudAccount.refreshToken,
+        decryptToken(cloudAccount.accessToken),
+        decryptToken(cloudAccount.refreshToken),
         file.providerFileId
       );
 
@@ -886,7 +887,7 @@ export class FileService {
 
     if (!account) throw new Error('Account not found');
     if (account.userId !== userId) throw new Error('Unauthorized');
-    if (!account.accessToken) throw new Error('Account not authenticated');
+    if (!decryptToken(account.accessToken)) throw new Error('Account not authenticated');
 
     try {
       let targetProviderId = 'root';
@@ -901,8 +902,8 @@ export class FileService {
       // 1. Upload to Provider
       const provider = ProviderFactory.getProvider(account.provider);
       const driveFile = await provider.uploadFile(
-        account.accessToken,
-        account.refreshToken,
+        decryptToken(account.accessToken),
+        decryptToken(account.refreshToken),
         originalName,
         mimeType,
         filePath,

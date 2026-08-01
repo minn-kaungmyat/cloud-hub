@@ -1,4 +1,5 @@
 import { prisma } from '../database/prisma';
+import { encryptToken } from '../utils/crypto';
 
 export class CloudAccountService {
   async upsertAccount(
@@ -13,6 +14,8 @@ export class CloudAccountService {
     storageTotal?: bigint | null
   ) {
     const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
+    const encryptedAccess = encryptToken(accessToken);
+    const encryptedRefresh = encryptToken(refreshToken);
 
     // We check if this provider + providerAccountId already exists for this user
     const existing = await prisma.cloudAccount.findFirst({
@@ -24,8 +27,8 @@ export class CloudAccountService {
         where: { id: existing.id },
         data: {
           email,
-          accessToken,
-          ...(refreshToken && { refreshToken }), // Only update refresh token if provided
+          accessToken: encryptedAccess,
+          ...(encryptedRefresh && { refreshToken: encryptedRefresh }), // Only update refresh token if provided
           ...(expiresAt && { expiresAt }),
           ...(storageUsed !== undefined && { storageUsed }),
           ...(storageTotal !== undefined && { storageTotal }),
@@ -39,8 +42,8 @@ export class CloudAccountService {
         provider,
         providerAccountId,
         email,
-        accessToken,
-        refreshToken,
+        accessToken: encryptedAccess!,
+        refreshToken: encryptedRefresh,
         expiresAt,
         storageUsed,
         storageTotal,
