@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useInView } from 'react-intersection-observer';
 import { Loader2 } from 'lucide-react';
 import { FileCard } from './FileCard';
@@ -20,7 +20,7 @@ interface InfiniteGridProps {
 
 export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetchingNextPage }: InfiniteGridProps) => {
   const { ref, inView } = useInView({ rootMargin: '400px' }); // Pre-fetch before they hit bottom
-  const { selectedFileIds, toggleFileSelection, clearSelection, setSelectedFile, viewMode } = useFileStore();
+  const { selectedFileIds, clearSelection, viewMode } = useFileStore();
   const setPreviewOpen = useUIStore(s => s.setPreviewOpen);
 
   useEffect(() => {
@@ -50,14 +50,11 @@ export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetch
     }
   };
 
-  const allFilesRaw = data?.pages.flatMap((page: FilesResponse) => page.files) || [];
-  
-  const allFiles = useMemo(() => {
-    return [...allFilesRaw].sort((a, b) => {
-      if (a.isFolder === b.isFolder) return 0;
-      return a.isFolder ? -1 : 1;
-    });
-  }, [allFilesRaw]);
+  const rawFiles = data?.pages.flatMap((page: FilesResponse) => page.files) || [];
+  const allFiles = rawFiles.sort((a, b) => {
+    if (a.isFolder === b.isFolder) return 0;
+    return a.isFolder ? -1 : 1;
+  });
 
   if (status === 'pending') {
     return (

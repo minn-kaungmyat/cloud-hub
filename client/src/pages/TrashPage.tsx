@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { InfiniteGrid } from '../components/InfiniteGrid';
 import { CommandBar } from '../components/CommandBar';
