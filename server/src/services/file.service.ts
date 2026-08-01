@@ -1,7 +1,6 @@
 import { prisma } from '../database/prisma';
-import * as googleProvider from '../providers/google.provider';
 import fs from 'fs';
-import { listFiles, getDriveQuota, renameFile as renameDriveFile, downloadFileStream, moveFile as moveDriveFile, createFolder as createDriveFolder, trashFile, getStartPageToken, listChanges } from '../providers/google.provider';
+import { ProviderFactory } from '../providers/provider.factory';
 import { AppError } from '../utils/AppError';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -15,27 +14,26 @@ export class FileService {
       throw new AppError('Cloud account not found', 404);
     }
 
-    if (account.provider === 'google-drive') {
-      if (!account.accessToken) {
-        throw new AppError('Account not authenticated', 401);
-      }
+    if (!account.accessToken) throw new AppError('Account not authenticated', 401);
 
-      if (account.syncStatus === 'syncing') {
-        return { count: 0, message: 'Sync already in progress' };
-      }
+    if (account.syncStatus === 'syncing') {
+      return { count: 0, message: 'Sync already in progress' };
+    }
 
-      try {
+    try {
+      const provider = ProviderFactory.getProvider(account.provider);
+
         // Mark as syncing
         await prisma.cloudAccount.update({
           where: { id: account.id },
           data: { syncStatus: 'syncing', syncError: null }
         });
 
-        // Fetch from Google
-        const { files: driveFiles, rootFolderId } = await listFiles(account.accessToken, account.refreshToken);
+        // Fetch from Provider
+        const { files: driveFiles, rootFolderId } = await provider.listFiles(account.accessToken!, account.refreshToken);
 
         try {
-          const quota = await getDriveQuota(account.accessToken, account.refreshToken);
+          const quota = await provider.getDriveQuota(account.accessToken!, account.refreshToken);
           if (quota) {
             await prisma.cloudAccount.update({
               where: { id: account.id },
@@ -127,7 +125,7 @@ export class FileService {
         }, { timeout: 120000 });
 
         // Mark as completed and save start page token
-        const syncToken = await getStartPageToken(account.accessToken, account.refreshToken);
+        const syncToken = await provider.getStartPageToken(account.accessToken!, account.refreshToken);
 
         await prisma.cloudAccount.update({
           where: { id: account.id },
@@ -151,9 +149,6 @@ export class FileService {
         });
         throw new AppError('File sync failed', 500);
       }
-    }
-
-    throw new AppError('Provider sync not implemented', 501);
   }
 
   async incrementalSync(cloudAccountId: string, userId: string) {
@@ -163,17 +158,17 @@ export class FileService {
 
     if (!account) throw new AppError('Cloud account not found', 404);
 
-    if (account.provider === 'google-drive') {
-      if (!account.accessToken) throw new AppError('Account not authenticated', 401);
-      
-      if (account.syncStatus === 'syncing') {
-        return { count: 0, message: 'Sync already in progress' };
-      }
+    if (!account.accessToken) throw new AppError('Account not authenticated', 401);
 
-      if (!account.syncToken) return this.syncFiles(cloudAccountId, userId);
+    if (account.syncStatus === 'syncing') {
+      return { count: 0, message: 'Sync already in progress' };
+    }
 
-      try {
-        const { changes, newStartPageToken } = await listChanges(account.accessToken, account.refreshToken, account.syncToken);
+    if (!account.syncToken) return this.syncFiles(cloudAccountId, userId);
+
+    try {
+      const provider = ProviderFactory.getProvider(account.provider);
+      const { changes, newStartPageToken } = await provider.listChanges(account.accessToken!, account.refreshToken, account.syncToken);
 
         if (changes.length > 0) {
           const existingFiles = await prisma.file.findMany({
@@ -256,9 +251,6 @@ export class FileService {
         console.error('Incremental sync failed:', error);
         throw new AppError('Incremental file sync failed', 500);
       }
-    }
-    
-    throw new AppError('Provider sync not implemented', 501);
   }
 
   async getFiles(cloudAccountId: string | undefined, userId: string, folderId: string = 'root', limit: number = 50, cursor?: string, type?: 'folder' | 'file') {
@@ -489,16 +481,16 @@ export class FileService {
       return null;
     }
 
-    if (file.provider === 'google-drive') {
-      const { getThumbnailLink } = await import('../providers/google.provider');
-      let url = await getThumbnailLink(file.cloudAccount.accessToken!, file.cloudAccount.refreshToken, file.providerFileId);
-      if (url) {
-        // Google Drive thumbnailLinks default to 220px width (e.g. =s220)
-        // We replace it with =s512 for high-resolution images in the grid and inspector
+    if (!file.cloudAccount.accessToken) return null;
+
+    const provider = ProviderFactory.getProvider(file.provider);
+    let url = await provider.getThumbnailLink(file.cloudAccount.accessToken, file.cloudAccount.refreshToken, file.providerFileId);
+    
+    if (url) {
+      if (file.provider === 'google-drive') {
         url = url.replace(/=s\d+$/, '=s512');
-        return { url, accessToken: file.cloudAccount.accessToken! };
       }
-      return null;
+      return { url, accessToken: file.cloudAccount.accessToken };
     }
 
     return null;
@@ -521,42 +513,39 @@ export class FileService {
 
     const { cloudAccount } = file;
 
-    // 2. Perform the actual rename on the cloud provider
-    if (cloudAccount.provider === 'google-drive') {
-      if (!cloudAccount.accessToken) {
-        throw new AppError('Account not authenticated', 401);
-      }
-      
-      let updatedDriveFile;
-      try {
-        updatedDriveFile = await renameDriveFile(
-          cloudAccount.accessToken,
-          cloudAccount.refreshToken,
-          file.providerFileId,
-          newName
-        );
-      } catch (error: any) {
-        if (error.response?.status === 403) {
-          throw new AppError('Permission denied. You must remove and re-add your account to grant write access.', 403);
-        }
-        throw new AppError(error.message || 'Failed to rename file on Google Drive', 500);
-      }
-      // 3. Update local DB
-      const updatedFile = await prisma.file.update({
-        where: { id },
-        data: {
-          name: newName,
-          modifiedTime: updatedDriveFile.modifiedTime ? new Date(updatedDriveFile.modifiedTime) : new Date(),
-        }
-      });
-
-      return {
-        ...updatedFile,
-        size: Number(updatedFile.size)
-      };
-    } else {
-      throw new AppError('Provider rename not supported', 400);
+    if (!cloudAccount.accessToken) {
+      throw new AppError('Account not authenticated', 401);
     }
+    
+    const provider = ProviderFactory.getProvider(cloudAccount.provider);
+    
+    let updatedDriveFile;
+    try {
+      updatedDriveFile = await provider.renameFile(
+        cloudAccount.accessToken,
+        cloudAccount.refreshToken,
+        file.providerFileId,
+        newName
+      );
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        throw new AppError('Permission denied. You must remove and re-add your account to grant write access.', 403);
+      }
+      throw new AppError(error.message || `Failed to rename file on ${cloudAccount.provider}`, 500);
+    }
+    // 3. Update local DB
+    const updatedFile = await prisma.file.update({
+      where: { id },
+      data: {
+        name: newName,
+        modifiedTime: updatedDriveFile.modifiedTime ? new Date(updatedDriveFile.modifiedTime) : new Date(),
+      }
+    });
+
+    return {
+      ...updatedFile,
+      size: Number(updatedFile.size)
+    };
   }
 
   async downloadFile(id: string, userId: string) {
@@ -575,45 +564,45 @@ export class FileService {
 
     const { cloudAccount } = file;
 
-    if (cloudAccount.provider === 'google-drive') {
-      if (!cloudAccount.accessToken) {
-        throw new AppError('Account not authenticated', 401);
-      }
-      
-      if (file.isFolder) {
-        const getDescendants = async (parentId: string, currentPath: string): Promise<{dbFile: any, path: string}[]> => {
-          const children = await prisma.file.findMany({ where: { parentId, cloudAccountId: cloudAccount.id }});
-          let result: {dbFile: any, path: string}[] = [];
-          for (const child of children) {
-            if (child.isFolder) {
-              result = result.concat(await getDescendants(child.providerFileId, `${currentPath}${child.name}/`));
-            } else {
-              result.push({ dbFile: child, path: `${currentPath}${child.name}` });
-            }
+    if (!cloudAccount.accessToken) {
+      throw new AppError('Account not authenticated', 401);
+    }
+    
+    if (file.isFolder) {
+      const getDescendants = async (parentId: string, currentPath: string): Promise<{dbFile: any, path: string}[]> => {
+        const children = await prisma.file.findMany({ where: { parentId, cloudAccountId: cloudAccount.id }});
+        let result: {dbFile: any, path: string}[] = [];
+        for (const child of children) {
+          if (child.isFolder) {
+            result = result.concat(await getDescendants(child.providerFileId, `${currentPath}${child.name}/`));
+          } else {
+            result.push({ dbFile: child, path: `${currentPath}${child.name}` });
           }
-          return result;
-        };
+        }
+        return result;
+      };
 
-        const filesToZip = await getDescendants(file.providerFileId, `${file.name}/`);
+      const filesToZip = await getDescendants(file.providerFileId, `${file.name}/`);
 
-        return {
-          isArchive: true,
-          filesToZip,
-          filename: `${file.name}.zip`,
-          cloudAccount
-        } as any;
-      }
+      return {
+        isArchive: true,
+        filesToZip,
+        filename: `${file.name}.zip`,
+        cloudAccount
+      } as any;
+    }
 
-      try {
-        const streamResponse = await downloadFileStream(
-          cloudAccount.accessToken,
-          cloudAccount.refreshToken,
-          file.providerFileId,
-          file.mimeType
-        );
+    try {
+      const provider = ProviderFactory.getProvider(cloudAccount.provider);
+      const streamResponse = await provider.downloadFileStream(
+        cloudAccount.accessToken,
+        cloudAccount.refreshToken,
+        file.providerFileId,
+        file.mimeType
+      );
 
-        let finalName = file.name;
-        // Append correct extension if it was a Google Workspace file being exported
+      let finalName = file.name;
+      if (cloudAccount.provider === 'google-drive') {
         if (file.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {
           finalName += '.docx';
         } else if (file.mimeType === 'application/vnd.google-apps.spreadsheet' && !finalName.endsWith('.xlsx')) {
@@ -621,20 +610,17 @@ export class FileService {
         } else if (file.mimeType === 'application/vnd.google-apps.presentation' && !finalName.endsWith('.pptx')) {
           finalName += '.pptx';
         }
-
-        return {
-          stream: streamResponse.data,
-          filename: finalName,
-          // We don't strictly set content type here, we let the frontend or express handle it based on extension
-        };
-      } catch (error: any) {
-        if (error.response?.status === 403) {
-          throw new AppError('Permission denied. You must remove and re-add your account to grant write/download access.', 403);
-        }
-        throw new AppError(error.message || 'Failed to download file from Google Drive', 500);
       }
-    } else {
-      throw new AppError('Provider download not supported', 400);
+
+      return {
+        stream: streamResponse.data,
+        filename: finalName,
+      };
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        throw new AppError('Permission denied. You must remove and re-add your account to grant write/download access.', 403);
+      }
+      throw new AppError(error.message || `Failed to download file from ${cloudAccount.provider}`, 500);
     }
   }
 
@@ -669,40 +655,37 @@ export class FileService {
       targetProviderId = targetFolder.providerFileId;
     }
 
-    if (cloudAccount.provider === 'google-drive') {
-      if (!cloudAccount.accessToken) {
-        throw new AppError('Account not authenticated', 401);
-      }
-      
-      try {
-        const updatedDriveFile = await moveDriveFile(
-          cloudAccount.accessToken,
-          cloudAccount.refreshToken,
-          file.providerFileId,
-          targetProviderId
-        );
+    if (!cloudAccount.accessToken) {
+      throw new AppError('Account not authenticated', 401);
+    }
+    
+    try {
+      const provider = ProviderFactory.getProvider(cloudAccount.provider);
+      const updatedDriveFile = await provider.moveFile(
+        cloudAccount.accessToken,
+        cloudAccount.refreshToken,
+        file.providerFileId,
+        targetProviderId
+      );
 
-        // Update local DB
-        const updatedFile = await prisma.file.update({
-          where: { id },
-          data: {
-            parentId: newParentId === 'root' ? null : newParentId,
-            modifiedTime: updatedDriveFile.modifiedTime ? new Date(updatedDriveFile.modifiedTime) : new Date(),
-          }
-        });
-
-        return {
-          ...updatedFile,
-          size: Number(updatedFile.size)
-        };
-      } catch (error: any) {
-        if (error.response?.status === 403) {
-          throw new AppError('Permission denied. You must remove and re-add your account to grant write access.', 403);
+      // Update local DB
+      const updatedFile = await prisma.file.update({
+        where: { id },
+        data: {
+          parentId: newParentId === 'root' ? null : newParentId,
+          modifiedTime: updatedDriveFile.modifiedTime ? new Date(updatedDriveFile.modifiedTime) : new Date(),
         }
-        throw new AppError(error.message || 'Failed to move file on Google Drive', 500);
+      });
+
+      return {
+        ...updatedFile,
+        size: Number(updatedFile.size)
+      };
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        throw new AppError('Permission denied. You must remove and re-add your account to grant write access.', 403);
       }
-    } else {
-      throw new AppError('Provider move not supported', 400);
+      throw new AppError(error.message || `Failed to move file on ${cloudAccount.provider}`, 500);
     }
   }
 
@@ -714,51 +697,47 @@ export class FileService {
     if (!account) throw new AppError('Cloud account not found', 404);
     if (!account.accessToken) throw new AppError('Account not authenticated', 401);
 
-    if (account.provider === 'google-drive') {
-      try {
-        let targetProviderId = 'root';
-        if (parentProviderId !== 'root') {
-          const parentRecord = await prisma.file.findUnique({
-            where: { id: parentProviderId }
-          });
-          if (!parentRecord) throw new AppError('Parent folder not found', 404);
-          targetProviderId = parentRecord.providerFileId;
-        }
-
-        const { createFolder: createDriveFolder } = await import('../providers/google.provider');
-        const driveFolder = await createDriveFolder(
-          account.accessToken,
-          account.refreshToken,
-          folderName,
-          targetProviderId
-        );
-
-        // Create local DB record
-        const newFolder = await prisma.file.create({
-          data: {
-            providerFileId: driveFolder.id as string,
-            provider: account.provider,
-            name: driveFolder.name as string,
-            mimeType: driveFolder.mimeType as string,
-            size: BigInt(0),
-            parentId: parentProviderId === 'root' ? null : parentProviderId,
-            modifiedTime: driveFolder.modifiedTime ? new Date(driveFolder.modifiedTime) : new Date(),
-            hasThumbnail: false,
-            isFolder: true,
-            isShared: false,
-            cloudAccountId: account.id
-          }
+    try {
+      let targetProviderId = 'root';
+      if (parentProviderId !== 'root') {
+        const parentRecord = await prisma.file.findUnique({
+          where: { id: parentProviderId }
         });
-
-        return {
-          ...newFolder,
-          size: Number(newFolder.size)
-        };
-      } catch (error: any) {
-        throw new AppError(error.message || 'Failed to create folder on Google Drive', 500);
+        if (!parentRecord) throw new AppError('Parent folder not found', 404);
+        targetProviderId = parentRecord.providerFileId;
       }
-    } else {
-      throw new AppError('Provider create folder not supported', 400);
+
+      const provider = ProviderFactory.getProvider(account.provider);
+      const driveFolder = await provider.createFolder(
+        account.accessToken,
+        account.refreshToken,
+        folderName,
+        targetProviderId
+      );
+
+      // Create local DB record
+      const newFolder = await prisma.file.create({
+        data: {
+          providerFileId: driveFolder.id as string,
+          provider: account.provider,
+          name: driveFolder.name as string,
+          mimeType: driveFolder.mimeType as string,
+          size: BigInt(0),
+          parentId: parentProviderId === 'root' ? null : parentProviderId,
+          modifiedTime: driveFolder.modifiedTime ? new Date(driveFolder.modifiedTime) : new Date(),
+          hasThumbnail: false,
+          isFolder: true,
+          isShared: false,
+          cloudAccountId: account.id
+        }
+      });
+
+      return {
+        ...newFolder,
+        size: Number(newFolder.size)
+      };
+    } catch (error: any) {
+      throw new AppError(error.message || `Failed to create folder on ${account.provider}`, 500);
     }
   }
 
@@ -769,7 +748,6 @@ export class FileService {
 
     if (!account) throw new AppError('Cloud account not found', 404);
     if (!account.accessToken) throw new AppError('Account not authenticated', 401);
-    if (account.provider !== 'google-drive') throw new AppError('Provider not supported', 400);
 
     let targetRootProviderId = 'root';
     if (parentProviderId !== 'root') {
@@ -821,8 +799,8 @@ export class FileService {
       }
 
       try {
-        const { createFolder: createDriveFolder } = await import('../providers/google.provider');
-        const driveFolder = await createDriveFolder(
+        const provider = ProviderFactory.getProvider(account.provider);
+        const driveFolder = await provider.createFolder(
           account.accessToken,
           account.refreshToken,
           folderName,
@@ -850,7 +828,7 @@ export class FileService {
         folderLocalIdMap[path] = newFolder.id;
       } catch (error: any) {
         console.error(`Failed to create folder ${path}`, error);
-        throw new AppError(`Failed to create folder ${path} on Google Drive`, 500);
+        throw new AppError(`Failed to create folder ${path} on ${account.provider}`, 500);
       }
     }
     
@@ -873,33 +851,29 @@ export class FileService {
 
     const { cloudAccount } = file;
 
-    if (cloudAccount.provider === 'google-drive') {
-      if (!cloudAccount.accessToken) {
-        throw new AppError('Account not authenticated', 401);
-      }
-      
-      try {
-        const { trashFile } = await import('../providers/google.provider');
-        await trashFile(
-          cloudAccount.accessToken,
-          cloudAccount.refreshToken,
-          file.providerFileId
-        );
+    if (!cloudAccount.accessToken) {
+      throw new AppError('Account not authenticated', 401);
+    }
+    
+    try {
+      const provider = ProviderFactory.getProvider(cloudAccount.provider);
+      await provider.trashFile(
+        cloudAccount.accessToken,
+        cloudAccount.refreshToken,
+        file.providerFileId
+      );
 
-        // Delete local DB record
-        await prisma.file.delete({
-          where: { id }
-        });
+      // Delete local DB record
+      await prisma.file.delete({
+        where: { id }
+      });
 
-        return { success: true };
-      } catch (error: any) {
-        if (error.response?.status === 403) {
-          throw new AppError('Permission denied. You must remove and re-add your account to grant write access.', 403);
-        }
-        throw new AppError(error.message || 'Failed to delete file on Google Drive', 500);
+      return { success: true };
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        throw new AppError('Permission denied. You must remove and re-add your account to grant write access.', 403);
       }
-    } else {
-      throw new AppError('Provider delete not supported', 400);
+      throw new AppError(error.message || `Failed to delete file on ${cloudAccount.provider}`, 500);
     }
   }
 
@@ -922,8 +896,9 @@ export class FileService {
         targetProviderId = parentRecord.providerFileId;
       }
 
-      // 1. Upload to Google Drive (Provider handles 403 / quotaExceeded errors by throwing)
-      const driveFile = await googleProvider.uploadFile(
+      // 1. Upload to Provider
+      const provider = ProviderFactory.getProvider(account.provider);
+      const driveFile = await provider.uploadFile(
         account.accessToken,
         account.refreshToken,
         originalName,

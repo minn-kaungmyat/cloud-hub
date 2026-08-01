@@ -58,8 +58,20 @@ export const ContextMenu = () => {
     // We don't necessarily need the full CloudFile object for download since backend might just take IDs.
     // However, the current logic uses targetFiles to open windows. Let's fix that.
     
-    targetIds.forEach(id => {
-      window.open(`/api/files/${id}/download?token=${token}`, '_blank');
+    targetIds.forEach((id, index) => {
+      setTimeout(() => {
+        const url = `${import.meta.env.VITE_API_URL}/api/files/${id}/download?token=${token}`;
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 10000);
+      }, index * 500);
     });
     
     setContextMenu(false);

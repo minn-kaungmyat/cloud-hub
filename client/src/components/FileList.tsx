@@ -6,6 +6,7 @@ import { FileGridHeader } from './FileGridHeader';
 import { FileRow } from './FileRow';
 import { FileCard } from './FileCard';
 import { FolderCard } from './FolderCard';
+import { useActiveAccount } from '../hooks/useActiveAccount';
 import { EmptyState } from './EmptyState';
 import { useFileStore } from '../store/fileStore';
 import { useFiles, useMoveFile } from '../hooks/useFiles';
@@ -18,7 +19,7 @@ export const FileList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
 
-  const activeAccount = searchParams.get('account') || 'google-drive';
+  const activeAccount = useActiveAccount();
   const accountId = ['recent', 'favorites', 'large-files'].includes(activeAccount) ? undefined : activeAccount;
   const currentFolderId = searchParams.get('folder') || 'root';
 

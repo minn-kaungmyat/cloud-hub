@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { useRef, useState, useEffect } from 'react';
 import { useUploadStore } from '../store/uploadStore';
 import { useSearchParams } from 'react-router-dom';
+import { useActiveAccount } from '../hooks/useActiveAccount';
 
 export const FileActionBar = () => {
   const { selectedFileIds, clearSelection } = useFileStore();
@@ -34,7 +35,7 @@ export const FileActionBar = () => {
   }, []);
 
   const [searchParams] = useSearchParams();
-  const activeAccount = searchParams.get('account') || 'google-drive';
+  const activeAccount = useActiveAccount();
   const folderId = searchParams.get('folder') || 'root';
   const isCollection = ['recent', 'favorites', 'large-files'].includes(activeAccount);
   const accountId = isCollection ? '' : activeAccount;
@@ -121,18 +122,20 @@ export const FileActionBar = () => {
           <div className="w-px h-4 bg-zinc-800 mx-2" />
           <span className="text-xs text-zinc-400 mr-2 font-mono tabular-nums">{count} selected</span>
           <ActionBtn icon={<Download size={14} />} label="Download" onClick={() => {
-            selectedFileIds.forEach((id) => {
-              const url = `${import.meta.env.VITE_API_URL}/api/files/${id}/download?token=${token}`;
-              const iframe = document.createElement('iframe');
-              iframe.style.display = 'none';
-              iframe.src = url;
-              document.body.appendChild(iframe);
-              
+            selectedFileIds.forEach((id, index) => {
               setTimeout(() => {
-                if (document.body.contains(iframe)) {
-                  document.body.removeChild(iframe);
-                }
-              }, 5000);
+                const url = `${import.meta.env.VITE_API_URL}/api/files/${id}/download?token=${token}`;
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = url;
+                document.body.appendChild(iframe);
+                
+                setTimeout(() => {
+                  if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                  }
+                }, 10000);
+              }, index * 500);
             });
             clearSelection();
           }} />

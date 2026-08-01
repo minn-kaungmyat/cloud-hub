@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { generateAuthUrl, getTokens, getUserInfo, getDriveQuota } from '../providers/google.provider';
+import { ProviderFactory } from '../providers/provider.factory';
 import { cloudAccountService } from '../services/cloudAccount.service';
 import { fileService } from '../services/file.service';
 import jwt from 'jsonwebtoken';
@@ -12,9 +12,6 @@ export class CloudAccountController {
     const { provider } = req.params;
     const token = req.query.token as string;
 
-    if (provider !== 'google-drive') {
-      throw new AppError('Provider not supported', 400);
-    }
     if (!token) {
       throw new AppError('No token provided', 401);
     }
@@ -25,7 +22,8 @@ export class CloudAccountController {
       
       // We pass the userId inside the "state" parameter to survive the OAuth roundtrip
       const state = Buffer.from(JSON.stringify({ userId: decoded.id })).toString('base64');
-      const authUrl = generateAuthUrl(state);
+      const providerInstance = ProviderFactory.getProvider(provider as string);
+      const authUrl = providerInstance.generateAuthUrl(state);
       
       res.redirect(authUrl);
     } catch (err) {
@@ -51,21 +49,22 @@ export class CloudAccountController {
       const decodedState = JSON.parse(Buffer.from(state as string, 'base64').toString('utf-8'));
       const userId = decodedState.userId;
 
-      if (provider === 'google-drive') {
-        const tokens = await getTokens(code as string);
+      try {
+        const providerInstance = ProviderFactory.getProvider(provider as string);
+        const tokens = await providerInstance.getTokens(code as string);
         if (!tokens.access_token) {
           throw new Error('No access token received');
         }
 
-        const userInfo = await getUserInfo(tokens.access_token);
+        const userInfo = await providerInstance.getUserInfo(tokens.access_token);
         if (!userInfo.id || !userInfo.email) {
-          throw new Error('Incomplete user info from Google');
+          throw new Error('Incomplete user info from provider');
         }
 
         let storageUsed: bigint | null = null;
         let storageTotal: bigint | null = null;
         try {
-          const quota = await getDriveQuota(tokens.access_token, tokens.refresh_token || null);
+          const quota = await providerInstance.getDriveQuota(tokens.access_token, tokens.refresh_token || null);
           if (quota) {
             storageUsed = quota.usage ? BigInt(quota.usage) : null;
             storageTotal = quota.limit ? BigInt(quota.limit) : null;
@@ -76,7 +75,7 @@ export class CloudAccountController {
 
         const account = await cloudAccountService.upsertAccount(
           userId,
-          provider,
+          provider as string,
           userInfo.id,
           userInfo.email,
           tokens.access_token,
@@ -92,9 +91,10 @@ export class CloudAccountController {
         });
 
         return res.redirect(`${frontendUrl}/settings?success=true`);
+      } catch (e) {
+        console.error('Error during provider oauth', e);
+        res.redirect(`${frontendUrl}/settings?error=provider_error`);
       }
-
-      res.redirect(`${frontendUrl}/settings?error=provider_not_supported`);
     } catch (err) {
       console.error('OAuth Callback Error:', err);
       res.redirect(`${frontendUrl}/settings?error=server_error`);

@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { X, CheckSquare, Square, MinusSquare } from 'lucide-react';
 import { useCloudAccounts } from '../hooks/useCloudAccounts';
 import { ProviderIcon } from './ProviderIcon';
 
@@ -13,7 +13,14 @@ export const FilterDrawer = ({ isOpen, onClose }: FilterDrawerProps) => {
   const { data: accounts = [] } = useCloudAccounts();
 
   const currentType = searchParams.get('type') || '';
-  const includeAccounts = searchParams.getAll('includeAccounts');
+  const includeAccountsRaw = searchParams.getAll('includeAccounts');
+  const includeAccounts = includeAccountsRaw.length === 1 && includeAccountsRaw[0] === 'NONE' ? [] : includeAccountsRaw;
+  const isAllAccounts = includeAccountsRaw.length === 0;
+
+  const isAccountIncluded = (id: string) => {
+    if (isAllAccounts) return true;
+    return includeAccounts.includes(id);
+  };
   const sortBy = searchParams.get('sortBy') || 'date';
   const sortOrder = searchParams.get('sortOrder') || 'desc';
 
@@ -46,6 +53,73 @@ export const FilterDrawer = ({ isOpen, onClose }: FilterDrawerProps) => {
   const clearFilters = () => {
     setSearchParams(new URLSearchParams());
   };
+
+  const toggleAccount = (id: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('includeAccounts');
+    
+    let nextIncluded: string[];
+    if (isAllAccounts) {
+      nextIncluded = accounts.map(a => a.id).filter(aId => aId !== id);
+    } else {
+      if (includeAccounts.includes(id)) {
+        nextIncluded = includeAccounts.filter(aId => aId !== id);
+      } else {
+        nextIncluded = [...includeAccounts, id];
+      }
+    }
+    
+    if (nextIncluded.length === accounts.length) {
+      // Clear to mean ALL
+    } else if (nextIncluded.length === 0) {
+      newParams.append('includeAccounts', 'NONE');
+    } else {
+      nextIncluded.forEach(val => newParams.append('includeAccounts', val));
+    }
+    
+    setSearchParams(newParams);
+  };
+
+  const toggleProvider = (provider: string) => {
+    const providerAccounts = accounts.filter(a => a.provider === provider);
+    const providerIds = providerAccounts.map(a => a.id);
+    const allProviderIncluded = providerIds.every(id => isAccountIncluded(id));
+    
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('includeAccounts');
+    
+    let nextIncluded: string[];
+    if (isAllAccounts) {
+      if (allProviderIncluded) {
+        nextIncluded = accounts.map(a => a.id).filter(aId => !providerIds.includes(aId));
+      } else {
+        nextIncluded = [];
+      }
+    } else {
+      if (allProviderIncluded) {
+        nextIncluded = includeAccounts.filter(aId => !providerIds.includes(aId));
+      } else {
+        nextIncluded = Array.from(new Set([...includeAccounts, ...providerIds]));
+      }
+    }
+    
+    if (nextIncluded.length === accounts.length) {
+      // leave empty
+    } else if (nextIncluded.length === 0) {
+      newParams.append('includeAccounts', 'NONE');
+    } else {
+      nextIncluded.forEach(val => newParams.append('includeAccounts', val));
+    }
+    
+    setSearchParams(newParams);
+  };
+
+  // Group accounts by provider
+  const accountsByProvider = accounts.reduce((acc, account) => {
+    if (!acc[account.provider]) acc[account.provider] = [];
+    acc[account.provider].push(account);
+    return acc;
+  }, {} as Record<string, typeof accounts>);
 
   const fileTypes = [
     { id: '', label: 'All Types' },
@@ -146,35 +220,64 @@ export const FilterDrawer = ({ isOpen, onClose }: FilterDrawerProps) => {
         {/* Accounts Selection */}
         <section>
           <h3 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2 px-2">Cloud Accounts</h3>
-          <div className="space-y-0.5">
-            {accounts.map(acc => {
-              const isIncluded = includeAccounts.includes(acc.id);
-              
+          <div className="space-y-1">
+            {Object.entries(accountsByProvider).map(([provider, providerAccounts]) => {
+              const providerIds = providerAccounts.map(a => a.id);
+              const includedCount = providerIds.filter(id => isAccountIncluded(id)).length;
+              const allIncluded = includedCount === providerIds.length;
+              const someIncluded = includedCount > 0 && includedCount < providerIds.length;
+
               return (
-                <button
-                  key={acc.id} 
-                  onClick={() => updateFilter('includeAccounts', acc.id, true)}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm transition-colors text-left ${
-                    isIncluded
-                      ? 'bg-zinc-800/80' 
-                      : 'hover:bg-zinc-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 overflow-hidden">
-                    <ProviderIcon provider={acc.provider} size={14} className="shrink-0 opacity-80" />
-                    <div className="flex flex-col min-w-0">
-                      <span className={`text-xs truncate ${isIncluded ? 'text-zinc-200 font-medium' : 'text-zinc-400'}`}>
-                        {acc.label}
-                      </span>
-                      {acc.email && (
-                        <span className="text-[10px] text-zinc-500 truncate -mt-0.5">
-                          {acc.email}
-                        </span>
+                <div key={provider} className="flex flex-col">
+                  {/* Provider Header Row */}
+                  <button
+                    onClick={() => toggleProvider(provider)}
+                    className="flex items-center gap-2 px-2 py-1.5 w-full text-left rounded-sm transition-colors hover:bg-zinc-800/40 group"
+                  >
+                    <div className="shrink-0 text-zinc-500 group-hover:text-zinc-400 transition-colors">
+                      {allIncluded ? (
+                        <CheckSquare size={14} className="text-zinc-300" />
+                      ) : someIncluded ? (
+                        <MinusSquare size={14} className="text-zinc-400" />
+                      ) : (
+                        <Square size={14} />
                       )}
                     </div>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <ProviderIcon provider={provider as any} size={14} className="shrink-0 opacity-80" />
+                    <span className={`text-xs font-medium truncate flex-1 ${allIncluded || someIncluded ? 'text-zinc-200' : 'text-zinc-400'}`}>
+                      {provider.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                    </span>
+                  </button>
+
+                  {/* Account Child Rows */}
+                  <div className="flex flex-col mt-0.5 space-y-0.5">
+                    {providerAccounts.map(acc => {
+                      const isIncluded = isAccountIncluded(acc.id);
+                      return (
+                        <button
+                          key={acc.id}
+                          onClick={() => toggleAccount(acc.id)}
+                          className="flex items-center gap-2 pr-2 py-1.5 w-full text-left rounded-sm transition-colors hover:bg-zinc-800/40 group"
+                          style={{ paddingLeft: '34px' }}
+                        >
+                          <div className="shrink-0 text-zinc-500 group-hover:text-zinc-400 transition-colors">
+                            {isIncluded ? (
+                              <CheckSquare size={14} className="text-zinc-300" />
+                            ) : (
+                              <Square size={14} />
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className={`text-xs truncate ${isIncluded ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                              {acc.email || acc.label}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                  {isIncluded && <div className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0 ml-2" />}
-                </button>
+                </div>
               );
             })}
           </div>

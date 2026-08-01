@@ -3,12 +3,14 @@ import { X, Loader2 } from 'lucide-react';
 import { useUIStore } from '../store/uiStore';
 import { useCreateFolder } from '../hooks/useFiles';
 import { useSearchParams } from 'react-router-dom';
+import { useActiveAccount } from '../hooks/useActiveAccount';
 import { toast } from 'sonner';
 
 export const NewFolderModal = () => {
   const { newFolderOpen, setNewFolderOpen } = useUIStore();
   const [name, setName] = useState('');
   const [searchParams] = useSearchParams();
+  const activeAccount = useActiveAccount();
   
   const { mutate: createFolder, isPending } = useCreateFolder();
 
@@ -26,7 +28,7 @@ export const NewFolderModal = () => {
   const handleCreate = () => {
     const folderName = name.trim() || 'Untitled Folder';
     const folderId = searchParams.get('folder') || 'root';
-    const accountId = searchParams.get('account') || 'google-drive';
+    const accountId = activeAccount;
 
     if (['recent', 'favorites', 'large-files'].includes(accountId)) {
       toast.error('Cannot create folder in this view');

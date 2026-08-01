@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Clock, Star, FileSearch, RefreshCw, Home } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { SidebarItem } from './SidebarItem';
@@ -8,15 +8,15 @@ import { AddAccountButton } from './AddAccountButton';
 import { ProviderIcon } from './ProviderIcon';
 import { StatusBadge } from './StatusBadge';
 import { useCloudAccounts, useIncrementalSync } from '../hooks/useCloudAccounts';
+import { useActiveAccount } from '../hooks/useActiveAccount';
 
 export const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { data: accounts = [], isLoading } = useCloudAccounts();
   const { mutate: incrementalSync, isPending: isSyncing, variables: syncingAccountId } = useIncrementalSync();
   
-  const activeItem = searchParams.get('account') || 'google-drive';
+  const activeItem = useActiveAccount();
 
   useEffect(() => {
     if (location.pathname === '/' && accounts.length > 0) {
@@ -25,7 +25,7 @@ export const Sidebar = () => {
         navigate('/browse', { replace: true });
       }
     }
-  }, [location.pathname, accounts, activeItem, setSearchParams, navigate]);
+  }, [location.pathname, accounts, activeItem, navigate]);
 
   return (
     <aside className="w-[260px] flex flex-col border-r border-zinc-800/60 bg-zinc-950 shrink-0">

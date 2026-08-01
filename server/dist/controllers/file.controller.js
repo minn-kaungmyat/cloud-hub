@@ -1,43 +1,11 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.fileController = exports.FileController = void 0;
 const file_service_1 = require("../services/file.service");
 const asyncHandler_1 = require("../utils/asyncHandler");
 const AppError_1 = require("../utils/AppError");
 const archiver = require("archiver");
+const provider_factory_1 = require("../providers/provider.factory");
 class FileController {
     syncFiles = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         const accountId = req.params.accountId;
@@ -166,19 +134,21 @@ class FileController {
             });
             res.setHeader('Content-Type', 'application/zip');
             archive.pipe(res);
-            const { downloadFileStream } = await Promise.resolve().then(() => __importStar(require('../providers/google.provider')));
+            const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
             for (const f of filesToZip) {
                 try {
-                    const streamResponse = await downloadFileStream(cloudAccount.accessToken, cloudAccount.refreshToken, f.dbFile.providerFileId, f.dbFile.mimeType);
+                    const streamResponse = await provider.downloadFileStream(cloudAccount.accessToken, cloudAccount.refreshToken, f.dbFile.providerFileId, f.dbFile.mimeType);
                     let finalName = f.path;
-                    if (f.dbFile.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {
-                        finalName += '.docx';
-                    }
-                    else if (f.dbFile.mimeType === 'application/vnd.google-apps.spreadsheet' && !finalName.endsWith('.xlsx')) {
-                        finalName += '.xlsx';
-                    }
-                    else if (f.dbFile.mimeType === 'application/vnd.google-apps.presentation' && !finalName.endsWith('.pptx')) {
-                        finalName += '.pptx';
+                    if (cloudAccount.provider === 'google-drive') {
+                        if (f.dbFile.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {
+                            finalName += '.docx';
+                        }
+                        else if (f.dbFile.mimeType === 'application/vnd.google-apps.spreadsheet' && !finalName.endsWith('.xlsx')) {
+                            finalName += '.xlsx';
+                        }
+                        else if (f.dbFile.mimeType === 'application/vnd.google-apps.presentation' && !finalName.endsWith('.pptx')) {
+                            finalName += '.pptx';
+                        }
                     }
                     archive.append(streamResponse.data, { name: finalName });
                     // Wait for the stream to be fully consumed by archiver before fetching the next one

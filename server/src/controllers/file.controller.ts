@@ -3,6 +3,7 @@ import { fileService } from '../services/file.service';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
 import archiver = require('archiver');
+import { ProviderFactory } from '../providers/provider.factory';
 
 export class FileController {
   
@@ -168,11 +169,11 @@ export class FileController {
       res.setHeader('Content-Type', 'application/zip');
       archive.pipe(res);
 
-      const { downloadFileStream } = await import('../providers/google.provider');
+      const provider = ProviderFactory.getProvider(cloudAccount.provider);
 
       for (const f of filesToZip) {
         try {
-          const streamResponse = await downloadFileStream(
+          const streamResponse = await provider.downloadFileStream(
             cloudAccount.accessToken,
             cloudAccount.refreshToken,
             f.dbFile.providerFileId,
@@ -180,12 +181,14 @@ export class FileController {
           );
           
           let finalName = f.path;
-          if (f.dbFile.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {
-            finalName += '.docx';
-          } else if (f.dbFile.mimeType === 'application/vnd.google-apps.spreadsheet' && !finalName.endsWith('.xlsx')) {
-            finalName += '.xlsx';
-          } else if (f.dbFile.mimeType === 'application/vnd.google-apps.presentation' && !finalName.endsWith('.pptx')) {
-            finalName += '.pptx';
+          if (cloudAccount.provider === 'google-drive') {
+            if (f.dbFile.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {
+              finalName += '.docx';
+            } else if (f.dbFile.mimeType === 'application/vnd.google-apps.spreadsheet' && !finalName.endsWith('.xlsx')) {
+              finalName += '.xlsx';
+            } else if (f.dbFile.mimeType === 'application/vnd.google-apps.presentation' && !finalName.endsWith('.pptx')) {
+              finalName += '.pptx';
+            }
           }
 
           archive.append(streamResponse.data, { name: finalName });

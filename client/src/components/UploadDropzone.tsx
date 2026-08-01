@@ -2,13 +2,14 @@ import { Upload } from 'lucide-react';
 import { useUIStore } from '../store/uiStore';
 import { useUploadStore } from '../store/uploadStore';
 import { useSearchParams } from 'react-router-dom';
+import { useActiveAccount } from '../hooks/useActiveAccount';
 
 export const UploadDropzone = () => {
   const { dragOver, setDragOver } = useUIStore();
   const addFolderUploads = useUploadStore((s) => s.addFolderUploads);
   
   const [searchParams] = useSearchParams();
-  const activeAccount = searchParams.get('account') || 'google-drive';
+  const activeAccount = useActiveAccount();
   const folderId = searchParams.get('folder') || 'root';
   const isCollection = ['recent', 'favorites', 'large-files'].includes(activeAccount);
   const accountId = isCollection ? '' : activeAccount;

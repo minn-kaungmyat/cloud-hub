@@ -12,7 +12,7 @@ export const useCloudAccounts = () => {
       
       // Silently trigger background incremental sync for connected accounts
       accounts.forEach(acc => {
-        if (acc.provider === 'google-drive' && acc.syncStatus === 'completed') {
+        if (acc.syncStatus === 'completed') {
           api.post(`/api/files/sync/incremental/${acc.id}`)
             .then((syncRes) => {
               if (syncRes.data?.data?.count > 0) {

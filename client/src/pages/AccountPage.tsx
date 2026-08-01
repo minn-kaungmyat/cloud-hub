@@ -6,18 +6,23 @@ import { useFileStore } from '../store/fileStore';
 import { useUIStore } from '../store/uiStore';
 import { useFolderPath } from '../hooks/useFiles';
 import { useSearchParams } from 'react-router-dom';
+import { useActiveAccount } from '../hooks/useActiveAccount';
 
 const AccountPage = () => {
   const { viewMode, setViewMode } = useFileStore();
   const setDragOver = useUIStore((s) => s.setDragOver);
   
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeAccount = searchParams.get('account') || 'google-drive';
+  const activeAccount = useActiveAccount();
   const folderId = searchParams.get('folder') || 'root';
+
+  const { data: pathData = [] } = useFolderPath(folderId);
+
+  if (!activeAccount) {
+    return <div className="flex-1 flex items-center justify-center text-zinc-500">No accounts connected</div>;
+  }
   
   const accountId = ['recent', 'favorites', 'large-files'].includes(activeAccount) ? undefined : activeAccount;
-  
-  const { data: pathData = [] } = useFolderPath(folderId);
 
   const segments = [
     { id: 'root', label: accountId ? 'Account Root' : 'All Files' },

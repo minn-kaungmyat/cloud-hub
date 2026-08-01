@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cloudAccountController = exports.CloudAccountController = void 0;
-const google_provider_1 = require("../providers/google.provider");
+const provider_factory_1 = require("../providers/provider.factory");
 const cloudAccount_service_1 = require("../services/cloudAccount.service");
 const file_service_1 = require("../services/file.service");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -14,9 +14,6 @@ class CloudAccountController {
     authRedirect = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         const { provider } = req.params;
         const token = req.query.token;
-        if (provider !== 'google-drive') {
-            throw new AppError_1.AppError('Provider not supported', 400);
-        }
         if (!token) {
             throw new AppError_1.AppError('No token provided', 401);
         }
@@ -25,7 +22,8 @@ class CloudAccountController {
             const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
             // We pass the userId inside the "state" parameter to survive the OAuth roundtrip
             const state = Buffer.from(JSON.stringify({ userId: decoded.id })).toString('base64');
-            const authUrl = (0, google_provider_1.generateAuthUrl)(state);
+            const providerInstance = provider_factory_1.ProviderFactory.getProvider(provider);
+            const authUrl = providerInstance.generateAuthUrl(state);
             res.redirect(authUrl);
         }
         catch (err) {
@@ -46,19 +44,20 @@ class CloudAccountController {
         try {
             const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
             const userId = decodedState.userId;
-            if (provider === 'google-drive') {
-                const tokens = await (0, google_provider_1.getTokens)(code);
+            try {
+                const providerInstance = provider_factory_1.ProviderFactory.getProvider(provider);
+                const tokens = await providerInstance.getTokens(code);
                 if (!tokens.access_token) {
                     throw new Error('No access token received');
                 }
-                const userInfo = await (0, google_provider_1.getUserInfo)(tokens.access_token);
+                const userInfo = await providerInstance.getUserInfo(tokens.access_token);
                 if (!userInfo.id || !userInfo.email) {
-                    throw new Error('Incomplete user info from Google');
+                    throw new Error('Incomplete user info from provider');
                 }
                 let storageUsed = null;
                 let storageTotal = null;
                 try {
-                    const quota = await (0, google_provider_1.getDriveQuota)(tokens.access_token, tokens.refresh_token || null);
+                    const quota = await providerInstance.getDriveQuota(tokens.access_token, tokens.refresh_token || null);
                     if (quota) {
                         storageUsed = quota.usage ? BigInt(quota.usage) : null;
                         storageTotal = quota.limit ? BigInt(quota.limit) : null;
@@ -74,7 +73,10 @@ class CloudAccountController {
                 });
                 return res.redirect(`${frontendUrl}/settings?success=true`);
             }
-            res.redirect(`${frontendUrl}/settings?error=provider_not_supported`);
+            catch (e) {
+                console.error('Error during provider oauth', e);
+                res.redirect(`${frontendUrl}/settings?error=provider_error`);
+            }
         }
         catch (err) {
             console.error('OAuth Callback Error:', err);

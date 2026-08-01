@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, Folder, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
 import { useUIStore } from '../store/uiStore';
 import { useFolders, useMoveFile } from '../hooks/useFiles';
-import { useSearchParams } from 'react-router-dom';
+import { useActiveAccount } from '../hooks/useActiveAccount';
 import { toast } from 'sonner';
 import { useFileStore } from '../store/fileStore';
 
@@ -50,7 +50,7 @@ const FolderTreeItem = ({ folderId, localId, name, depth = 0, accountId, selecte
           )}
         </button>
         
-        <Folder size={14} className={isSelected ? 'text-accent' : 'text-zinc-500'} shrink-0={true.toString()} />
+        <Folder size={14} className={isSelected ? 'text-accent' : 'text-zinc-500'} />
         <span className="truncate">{name}</span>
       </div>
       
@@ -87,12 +87,11 @@ const FolderTreeItem = ({ folderId, localId, name, depth = 0, accountId, selecte
 
 export const MoveModal = () => {
   const { moveOpen, moveTarget, closeMove } = useUIStore();
-  const [searchParams] = useSearchParams();
   
   const [selectedId, setSelectedId] = useState<string>('root');
   const [selectedName, setSelectedName] = useState<string>('My Drive');
   
-  const activeAccount = searchParams.get('account') || 'google-drive';
+  const activeAccount = useActiveAccount();
   const accountId = ['recent', 'favorites', 'large-files'].includes(activeAccount) ? undefined : activeAccount;
 
   const { mutateAsync: moveFileAsync, isPending } = useMoveFile();
