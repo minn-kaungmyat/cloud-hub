@@ -196,7 +196,7 @@ class DropboxProvider {
                 'Dropbox-API-Arg': JSON.stringify({
                     resource: { '.tag': 'path', path: fileId },
                     format: { '.tag': 'jpeg' },
-                    size: { '.tag': 'w256h256' },
+                    size: { '.tag': 'w480h320' },
                     mode: { '.tag': 'strict' }
                 })
             }

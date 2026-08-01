@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.fileService = exports.FileService = void 0;
+const crypto_1 = require("../utils/crypto");
 const prisma_1 = require("../database/prisma");
 const fs_1 = __importDefault(require("fs"));
 const provider_factory_1 = require("../providers/provider.factory");
@@ -17,7 +18,7 @@ class FileService {
         if (!account) {
             throw new AppError_1.AppError('Cloud account not found', 404);
         }
-        if (!account.accessToken)
+        if (!(0, crypto_1.decryptToken)(account.accessToken))
             throw new AppError_1.AppError('Account not authenticated', 401);
         if (account.syncStatus === 'syncing') {
             return { count: 0, message: 'Sync already in progress' };
@@ -30,9 +31,9 @@ class FileService {
                 data: { syncStatus: 'syncing', syncError: null }
             });
             // Fetch from Provider
-            const { files: driveFiles, rootFolderId } = await provider.listFiles(account.accessToken, account.refreshToken);
+            const { files: driveFiles, rootFolderId } = await provider.listFiles((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken));
             try {
-                const quota = await provider.getDriveQuota(account.accessToken, account.refreshToken);
+                const quota = await provider.getDriveQuota((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken));
                 if (quota) {
                     await prisma_1.prisma.cloudAccount.update({
                         where: { id: account.id },
@@ -122,7 +123,7 @@ class FileService {
                 }
             }, { timeout: 120000 });
             // Mark as completed and save start page token
-            const syncToken = await provider.getStartPageToken(account.accessToken, account.refreshToken);
+            const syncToken = await provider.getStartPageToken((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken));
             await prisma_1.prisma.cloudAccount.update({
                 where: { id: account.id },
                 data: {
@@ -152,7 +153,7 @@ class FileService {
         });
         if (!account)
             throw new AppError_1.AppError('Cloud account not found', 404);
-        if (!account.accessToken)
+        if (!(0, crypto_1.decryptToken)(account.accessToken))
             throw new AppError_1.AppError('Account not authenticated', 401);
         if (account.syncStatus === 'syncing') {
             return { count: 0, message: 'Sync already in progress' };
@@ -161,7 +162,7 @@ class FileService {
             return this.syncFiles(cloudAccountId, userId);
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
-            const { changes, newStartPageToken } = await provider.listChanges(account.accessToken, account.refreshToken, account.syncToken);
+            const { changes, newStartPageToken } = await provider.listChanges((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), account.syncToken);
             if (changes.length > 0) {
                 const existingFiles = await prisma_1.prisma.file.findMany({
                     where: { cloudAccountId: account.id },
@@ -443,15 +444,15 @@ class FileService {
         if (!file || !file.hasThumbnail) {
             return null;
         }
-        if (!file.cloudAccount.accessToken)
+        if (!(0, crypto_1.decryptToken)(file.cloudAccount.accessToken))
             return null;
         const provider = provider_factory_1.ProviderFactory.getProvider(file.provider);
-        let url = await provider.getThumbnailLink(file.cloudAccount.accessToken, file.cloudAccount.refreshToken, file.providerFileId);
+        let url = await provider.getThumbnailLink((0, crypto_1.decryptToken)(file.cloudAccount.accessToken), (0, crypto_1.decryptToken)(file.cloudAccount.refreshToken), file.providerFileId);
         if (url) {
             if (file.provider === 'google-drive') {
                 url = url.replace(/=s\d+$/, '=s512');
             }
-            return { url, accessToken: file.cloudAccount.accessToken };
+            return { url, accessToken: (0, crypto_1.decryptToken)(file.cloudAccount.accessToken) };
         }
         return null;
     }
@@ -468,13 +469,13 @@ class FileService {
             throw new AppError_1.AppError('Unauthorized', 403);
         }
         const { cloudAccount } = file;
-        if (!cloudAccount.accessToken) {
+        if (!(0, crypto_1.decryptToken)(cloudAccount.accessToken)) {
             throw new AppError_1.AppError('Account not authenticated', 401);
         }
         const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
         let updatedDriveFile;
         try {
-            updatedDriveFile = await provider.renameFile(cloudAccount.accessToken, cloudAccount.refreshToken, file.providerFileId, newName);
+            updatedDriveFile = await provider.renameFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, newName);
         }
         catch (error) {
             if (error.response?.status === 403) {
@@ -507,7 +508,7 @@ class FileService {
             throw new AppError_1.AppError('Unauthorized', 403);
         }
         const { cloudAccount } = file;
-        if (!cloudAccount.accessToken) {
+        if (!(0, crypto_1.decryptToken)(cloudAccount.accessToken)) {
             throw new AppError_1.AppError('Account not authenticated', 401);
         }
         if (file.isFolder) {
@@ -534,7 +535,7 @@ class FileService {
         }
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
-            const streamResponse = await provider.downloadFileStream(cloudAccount.accessToken, cloudAccount.refreshToken, file.providerFileId, file.mimeType);
+            const streamResponse = await provider.downloadFileStream((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, file.mimeType);
             let finalName = file.name;
             if (cloudAccount.provider === 'google-drive') {
                 if (file.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {
@@ -550,6 +551,7 @@ class FileService {
             return {
                 stream: streamResponse.data,
                 filename: finalName,
+                mimeType: file.mimeType
             };
         }
         catch (error) {
@@ -582,12 +584,12 @@ class FileService {
             }
             targetProviderId = targetFolder.providerFileId;
         }
-        if (!cloudAccount.accessToken) {
+        if (!(0, crypto_1.decryptToken)(cloudAccount.accessToken)) {
             throw new AppError_1.AppError('Account not authenticated', 401);
         }
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
-            const updatedDriveFile = await provider.moveFile(cloudAccount.accessToken, cloudAccount.refreshToken, file.providerFileId, targetProviderId);
+            const updatedDriveFile = await provider.moveFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, targetProviderId);
             // Update local DB
             const updatedFile = await prisma_1.prisma.file.update({
                 where: { id },
@@ -614,7 +616,7 @@ class FileService {
         });
         if (!account)
             throw new AppError_1.AppError('Cloud account not found', 404);
-        if (!account.accessToken)
+        if (!(0, crypto_1.decryptToken)(account.accessToken))
             throw new AppError_1.AppError('Account not authenticated', 401);
         try {
             let targetProviderId = 'root';
@@ -627,7 +629,7 @@ class FileService {
                 targetProviderId = parentRecord.providerFileId;
             }
             const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
-            const driveFolder = await provider.createFolder(account.accessToken, account.refreshToken, folderName, targetProviderId);
+            const driveFolder = await provider.createFolder((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), folderName, targetProviderId);
             // Create local DB record
             const newFolder = await prisma_1.prisma.file.create({
                 data: {
@@ -659,7 +661,7 @@ class FileService {
         });
         if (!account)
             throw new AppError_1.AppError('Cloud account not found', 404);
-        if (!account.accessToken)
+        if (!(0, crypto_1.decryptToken)(account.accessToken))
             throw new AppError_1.AppError('Account not authenticated', 401);
         let targetRootProviderId = 'root';
         if (parentProviderId !== 'root') {
@@ -704,7 +706,7 @@ class FileService {
             }
             try {
                 const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
-                const driveFolder = await provider.createFolder(account.accessToken, account.refreshToken, folderName, parentProviderId);
+                const driveFolder = await provider.createFolder((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), folderName, parentProviderId);
                 // Save to PostgreSQL immediately
                 const newFolder = await prisma_1.prisma.file.create({
                     data: {
@@ -743,12 +745,12 @@ class FileService {
             throw new AppError_1.AppError('Unauthorized', 403);
         }
         const { cloudAccount } = file;
-        if (!cloudAccount.accessToken) {
+        if (!(0, crypto_1.decryptToken)(cloudAccount.accessToken)) {
             throw new AppError_1.AppError('Account not authenticated', 401);
         }
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
-            await provider.trashFile(cloudAccount.accessToken, cloudAccount.refreshToken, file.providerFileId);
+            await provider.trashFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId);
             // Delete local DB record
             await prisma_1.prisma.file.delete({
                 where: { id }
@@ -770,7 +772,7 @@ class FileService {
             throw new Error('Account not found');
         if (account.userId !== userId)
             throw new Error('Unauthorized');
-        if (!account.accessToken)
+        if (!(0, crypto_1.decryptToken)(account.accessToken))
             throw new Error('Account not authenticated');
         try {
             let targetProviderId = 'root';
@@ -784,7 +786,7 @@ class FileService {
             }
             // 1. Upload to Provider
             const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
-            const driveFile = await provider.uploadFile(account.accessToken, account.refreshToken, originalName, mimeType, filePath, targetProviderId);
+            const driveFile = await provider.uploadFile((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), originalName, mimeType, filePath, targetProviderId);
             // 3. Insert into our PostgreSQL DB so it appears instantly
             const dbFile = await prisma_1.prisma.file.create({
                 data: {

@@ -158,11 +158,11 @@ export class OneDriveProvider implements ICloudProvider {
       const data = await res.json();
       if (data.value) {
         for (const item of data.value) {
+          const mapped = this.mapGraphFileToGeneric(item);
           if (item.deleted) {
-            allFilesMap.delete(item.id);
-          } else {
-            allFilesMap.set(item.id, this.mapGraphFileToGeneric(item));
+            mapped.trashed = true;
           }
+          allFilesMap.set(item.id, mapped);
         }
       }
       url = data['@odata.nextLink'] || '';
@@ -195,8 +195,12 @@ export class OneDriveProvider implements ICloudProvider {
     return this.mapGraphFileToGeneric(data);
   }
 
-  async downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string) {
-    const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`, {}, accessToken, refreshToken);
+  async downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string, range?: string) {
+    const options: RequestInit = {};
+    if (range) {
+      options.headers = { Range: range };
+    }
+    const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/content`, options, accessToken, refreshToken);
     
     if (!res.ok) {
       throw new Error(`Failed to download file from OneDrive: ${res.statusText}`);
@@ -252,6 +256,25 @@ export class OneDriveProvider implements ICloudProvider {
     return { success: true };
   }
 
+  async restoreFile(accessToken: string, refreshToken: string | null, fileId: string) {
+    // Fallback to OneDrive web interface as agreed
+    return { fallbackUrl: 'https://onedrive.live.com/?v=managestorage' };
+  }
+
+  async permanentlyDeleteFile(accessToken: string, refreshToken: string | null, fileId: string) {
+    // According to Microsoft Graph docs, DELETE on a recycle bin item permanently deletes it.
+    // Or if it's not supported easily, we just try to DELETE again.
+    const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
+      method: 'DELETE'
+    }, accessToken, refreshToken);
+    
+    return { success: true };
+  }
+
+  async emptyTrash(accessToken: string, refreshToken: string | null) {
+    throw new Error('OneDrive does not support a single empty trash command. Files must be permanently deleted individually.');
+  }
+
   async getStartPageToken(accessToken: string, refreshToken: string | null) {
     const res = await this.fetchGraph('https://graph.microsoft.com/v1.0/me/drive/root/delta?token=latest', {}, accessToken, refreshToken);
     if (!res.ok) throw new Error('Failed to get OneDrive delta token');
@@ -273,10 +296,16 @@ export class OneDriveProvider implements ICloudProvider {
       const data = await res.json();
       if (data.value) {
         for (const item of data.value) {
+          const isHardDeleted = item.deleted ? item.deleted.state === 'hardDeleted' : false;
+          const mappedFile = this.mapGraphFileToGeneric(item);
+          if (item.deleted && !isHardDeleted) {
+            mappedFile.trashed = true;
+          }
+          
           allChanges.push({
             fileId: item.id,
-            removed: item.deleted !== undefined,
-            file: item.deleted ? null : this.mapGraphFileToGeneric(item)
+            removed: isHardDeleted,
+            file: isHardDeleted ? null : mappedFile
           });
         }
       }

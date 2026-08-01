@@ -24,7 +24,7 @@ import { formatFileSize, formatDate } from '../utils/format';
 export interface FileRowProps {
   file: CloudFile;
   selected: boolean;
-  onClick: (e: React.MouseEvent, file: CloudFile) => void;
+  onClick: (e: React.MouseEvent, file: CloudFile, forceToggle?: boolean) => void;
   onDoubleClick?: (file: CloudFile) => void;
 }
 
@@ -34,7 +34,7 @@ export const FileIcon = ({ mimeType, isFolder, size, className }: { mimeType: st
 };
 
 export const FileRow = ({ file, selected, onClick, onDoubleClick }: FileRowProps) => {
-  const { bulkMode, selectedFileIds, toggleFileSelection, setSelectedFile } = useFileStore();
+  const { bulkMode, selectedFileIds, setSelectedFile } = useFileStore();
   const setContextMenu = useUIStore((s) => s.setContextMenu);
   const isChecked = selectedFileIds.includes(file.id);
 
@@ -110,7 +110,7 @@ export const FileRow = ({ file, selected, onClick, onDoubleClick }: FileRowProps
             checked={isChecked}
             onChange={(e) => {
               e.stopPropagation();
-              toggleFileSelection(file.id);
+              onClick(e, file, true);
             }}
           />
         ) : (

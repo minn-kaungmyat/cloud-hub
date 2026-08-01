@@ -23,4 +23,8 @@ router.patch('/:id/move', fileController.moveFile);
 router.get('/:id/download', fileController.downloadFile);
 router.delete('/:id', fileController.deleteFile);
 
+router.post('/trash/empty', fileController.emptyTrash);
+router.post('/:id/restore', fileController.restoreFile);
+router.delete('/:id/permanent', fileController.permanentlyDeleteFile);
+
 export default router;

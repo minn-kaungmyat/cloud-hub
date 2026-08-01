@@ -79,6 +79,7 @@ export const useRenameFile = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       queryClient.invalidateQueries({ queryKey: ['search'] });
+      queryClient.invalidateQueries({ queryKey: ['browse'] });
     }
   });
 };
@@ -95,6 +96,8 @@ export const useMoveFile = () => {
       // Invalidate both files and folder paths to refresh UI immediately
       queryClient.invalidateQueries({ queryKey: ['files'] });
       queryClient.invalidateQueries({ queryKey: ['folderPath'] });
+      queryClient.invalidateQueries({ queryKey: ['browse'] });
+      queryClient.invalidateQueries({ queryKey: ['search'] });
     }
   });
 };
@@ -110,6 +113,8 @@ export const useCreateFolder = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['browse'] });
+      queryClient.invalidateQueries({ queryKey: ['search'] });
     }
   });
 };
@@ -124,6 +129,54 @@ export const useDeleteFile = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['browse'] });
+      queryClient.invalidateQueries({ queryKey: ['search'] });
+    }
+  });
+};
+
+export const useRestoreFile = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.post(`/api/files/${id}/restore`);
+      return res.data?.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['browse'] });
+      queryClient.invalidateQueries({ queryKey: ['search'] });
+    }
+  });
+};
+
+export const usePermanentlyDeleteFile = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/files/${id}/permanent`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['browse'] });
+      queryClient.invalidateQueries({ queryKey: ['search'] });
+    }
+  });
+};
+
+export const useEmptyTrash = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (providerNames: string[]) => {
+      await api.post('/api/files/trash/empty', { providerNames });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['browse'] });
+      queryClient.invalidateQueries({ queryKey: ['search'] });
     }
   });
 };

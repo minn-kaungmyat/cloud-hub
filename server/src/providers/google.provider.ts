@@ -16,6 +16,15 @@ export class GoogleDriveProvider implements ICloudProvider {
     });
   }
 
+  private getDriveClient(accessToken: string, refreshToken: string | null) {
+    const oAuth2Client = this.getGoogleOAuthClient();
+    oAuth2Client.setCredentials({ 
+      access_token: accessToken,
+      refresh_token: refreshToken || undefined
+    });
+    return google.drive({ version: 'v3', auth: oAuth2Client });
+  }
+
   generateAuthUrl(state: string): string {
     const oAuth2Client = this.getGoogleOAuthClient();
     return oAuth2Client.generateAuthUrl({
@@ -61,8 +70,8 @@ export class GoogleDriveProvider implements ICloudProvider {
     do {
       const res: any = await drive.files.list({
         pageSize: 1000,
+        q: 'trashed=false or trashed=true',
         fields: 'nextPageToken, files(id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe)',
-        q: "trashed = false",
         pageToken: pageToken,
       });
       
@@ -77,13 +86,7 @@ export class GoogleDriveProvider implements ICloudProvider {
   }
 
   async getThumbnailLink(accessToken: string, refreshToken: string | null, fileId: string) {
-    const oAuth2Client = this.getGoogleOAuthClient();
-    oAuth2Client.setCredentials({ 
-      access_token: accessToken,
-      refresh_token: refreshToken || undefined
-    });
-    
-    const drive = google.drive({ version: 'v3', auth: oAuth2Client });
+    const drive = this.getDriveClient(accessToken, refreshToken);
     const res = await drive.files.get({
       fileId,
       fields: 'thumbnailLink'
@@ -95,13 +98,7 @@ export class GoogleDriveProvider implements ICloudProvider {
   }
 
   async getDriveQuota(accessToken: string, refreshToken: string | null) {
-    const oAuth2Client = this.getGoogleOAuthClient();
-    oAuth2Client.setCredentials({ 
-      access_token: accessToken,
-      refresh_token: refreshToken || undefined
-    });
-    
-    const drive = google.drive({ version: 'v3', auth: oAuth2Client });
+    const drive = this.getDriveClient(accessToken, refreshToken);
     const res = await drive.about.get({
       fields: 'storageQuota'
     });
@@ -110,13 +107,7 @@ export class GoogleDriveProvider implements ICloudProvider {
   }
 
   async renameFile(accessToken: string, refreshToken: string | null, fileId: string, newName: string) {
-    const oAuth2Client = this.getGoogleOAuthClient();
-    oAuth2Client.setCredentials({ 
-      access_token: accessToken,
-      refresh_token: refreshToken || undefined
-    });
-    
-    const drive = google.drive({ version: 'v3', auth: oAuth2Client });
+    const drive = this.getDriveClient(accessToken, refreshToken);
     const res = await drive.files.update({
       fileId,
       requestBody: {
@@ -128,14 +119,8 @@ export class GoogleDriveProvider implements ICloudProvider {
     return res.data;
   }
 
-  async downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string) {
-    const oAuth2Client = this.getGoogleOAuthClient();
-    oAuth2Client.setCredentials({ 
-      access_token: accessToken,
-      refresh_token: refreshToken || undefined
-    });
-    
-    const drive = google.drive({ version: 'v3', auth: oAuth2Client });
+  async downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string, range?: string) {
+    const drive = this.getDriveClient(accessToken, refreshToken);
     
     // Map Google Workspace mime types to standard Office formats
     const exportMimeTypes: Record<string, string> = {
@@ -154,21 +139,20 @@ export class GoogleDriveProvider implements ICloudProvider {
       }, { responseType: 'stream' }) as any;
     } else {
       // Download standard file
+      const options: any = { responseType: 'stream' };
+      if (range) {
+        options.headers = { Range: range };
+      }
       return drive.files.get({
         fileId,
-        alt: 'media'
-      }, { responseType: 'stream' }) as any;
+        alt: 'media',
+        acknowledgeAbuse: true
+      }, options) as any;
     }
   }
 
   async moveFile(accessToken: string, refreshToken: string | null, fileId: string, newParentId: string) {
-    const oAuth2Client = this.getGoogleOAuthClient();
-    oAuth2Client.setCredentials({ 
-      access_token: accessToken,
-      refresh_token: refreshToken || undefined
-    });
-    
-    const drive = google.drive({ version: 'v3', auth: oAuth2Client });
+    const drive = this.getDriveClient(accessToken, refreshToken);
 
     // First, get the current parents
     const file = await drive.files.get({
@@ -190,13 +174,7 @@ export class GoogleDriveProvider implements ICloudProvider {
   }
 
   async createFolder(accessToken: string, refreshToken: string | null, name: string, parentId: string) {
-    const oAuth2Client = this.getGoogleOAuthClient();
-    oAuth2Client.setCredentials({ 
-      access_token: accessToken,
-      refresh_token: refreshToken || undefined
-    });
-    
-    const drive = google.drive({ version: 'v3', auth: oAuth2Client });
+    const drive = this.getDriveClient(accessToken, refreshToken);
 
     const fileMetadata = {
       name: name,
@@ -213,30 +191,37 @@ export class GoogleDriveProvider implements ICloudProvider {
   }
 
   async trashFile(accessToken: string, refreshToken: string | null, fileId: string) {
-    const oAuth2Client = this.getGoogleOAuthClient();
-    oAuth2Client.setCredentials({ 
-      access_token: accessToken,
-      refresh_token: refreshToken || undefined
-    });
-    
-    const drive = google.drive({ version: 'v3', auth: oAuth2Client });
-
-    const res = await drive.files.update({
+    const drive = this.getDriveClient(accessToken, refreshToken);
+    await drive.files.update({
       fileId,
       requestBody: { trashed: true }
     });
+    return { success: true };
+  }
 
-    return res.data;
+  async restoreFile(accessToken: string, refreshToken: string | null, fileId: string) {
+    const drive = this.getDriveClient(accessToken, refreshToken);
+    await drive.files.update({
+      fileId,
+      requestBody: { trashed: false }
+    });
+    return { success: true };
+  }
+
+  async permanentlyDeleteFile(accessToken: string, refreshToken: string | null, fileId: string) {
+    const drive = this.getDriveClient(accessToken, refreshToken);
+    await drive.files.delete({ fileId });
+    return { success: true };
+  }
+
+  async emptyTrash(accessToken: string, refreshToken: string | null) {
+    const drive = this.getDriveClient(accessToken, refreshToken);
+    await drive.files.emptyTrash();
+    return { success: true };
   }
 
   async getStartPageToken(accessToken: string, refreshToken: string | null) {
-    const oAuth2Client = this.getGoogleOAuthClient();
-    oAuth2Client.setCredentials({ 
-      access_token: accessToken,
-      refresh_token: refreshToken || undefined
-    });
-    
-    const drive = google.drive({ version: 'v3', auth: oAuth2Client });
+    const drive = this.getDriveClient(accessToken, refreshToken);
     const res = await drive.changes.getStartPageToken({});
     return res.data.startPageToken as string;
   }

@@ -10,6 +10,7 @@ import { EmptyState } from './EmptyState';
 import { useFileStore } from '../store/fileStore';
 import { useFiles, useMoveFile } from '../hooks/useFiles';
 import { useCloudAccounts } from '../hooks/useCloudAccounts';
+import { useUIStore } from '../store/uiStore';
 import { toast } from 'sonner';
 import type { CloudFile } from '../types';
 
@@ -107,33 +108,38 @@ export const FileList = () => {
     return () => window.removeEventListener('move-file', handleMove as EventListener);
   }, [moveFileAsync, displayedFiles, clearSelection]);
 
-  const { multiSelect } = useFileStore();
-
-  const handleClick = (e: React.MouseEvent, file: CloudFile) => {
-    const isCtrl = e.ctrlKey || e.metaKey;
-    const isShift = e.shiftKey;
-    
-    if (isCtrl || isShift) {
-      multiSelect(file.id, isCtrl, isShift, displayedFiles.map(f => f.id));
-    } else {
-      multiSelect(file.id, false, false, displayedFiles.map(f => f.id));
-    }
-  };
-
-  const handleDoubleClick = (file: CloudFile) => {
-    if (file.isFolder) {
-      searchParams.set('folder', file.id);
-      setSearchParams(searchParams);
-      clearSelection();
-    }
-  };
-
   const sortedFiles = React.useMemo(() => {
     return [...displayedFiles].sort((a, b) => {
       if (a.isFolder === b.isFolder) return 0;
       return a.isFolder ? -1 : 1;
     });
   }, [displayedFiles]);
+
+  const { multiSelect } = useFileStore();
+
+  const handleClick = (e: React.MouseEvent, file: CloudFile, forceToggle: boolean = false) => {
+    const isCtrl = e.ctrlKey || e.metaKey || forceToggle;
+    const isShift = e.shiftKey;
+    const allIds = sortedFiles.map(f => f.id);
+    
+    if (isCtrl || isShift) {
+      multiSelect(file.id, isCtrl, isShift, allIds);
+    } else {
+      multiSelect(file.id, false, false, allIds);
+    }
+  };
+
+  const setPreviewOpen = useUIStore(s => s.setPreviewOpen);
+
+  const handleDoubleClick = (file: CloudFile) => {
+    if (file.isFolder) {
+      searchParams.set('folder', file.id);
+      setSearchParams(searchParams);
+      clearSelection();
+    } else {
+      setPreviewOpen(true);
+    }
+  };
 
   if (status === 'pending') {
     return (

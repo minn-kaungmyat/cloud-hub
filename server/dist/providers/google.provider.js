@@ -82,7 +82,7 @@ class GoogleDriveProvider {
         const link = res.data.thumbnailLink;
         if (!link)
             return null;
-        return link.replace(/=s\d+$/, '') + '=s256';
+        return link.replace(/=s\d+$/, '') + '=s512';
     }
     async getDriveQuota(accessToken, refreshToken) {
         const oAuth2Client = this.getGoogleOAuthClient();

@@ -8,6 +8,8 @@ interface UIStore {
   renameOpen: boolean;
   moveOpen: boolean;
   confirmOpen: boolean;
+  previewOpen: boolean;
+  setPreviewOpen: (open: boolean) => void;
   dragOver: boolean;
   contextMenuOpen: boolean;
   contextMenuPosition: { x: number; y: number };
@@ -44,6 +46,7 @@ export const useUIStore = create<UIStore>((set) => ({
   renameOpen: false,
   moveOpen: false,
   confirmOpen: false,
+  previewOpen: false,
   dragOver: false,
   contextMenuOpen: false,
   contextMenuPosition: { x: 0, y: 0 },
@@ -61,6 +64,7 @@ export const useUIStore = create<UIStore>((set) => ({
   setUploadOpen: (open) => set({ uploadOpen: open }),
   setNewFolderOpen: (open) => set({ newFolderOpen: open }),
   setConnectAccountOpen: (open) => set({ connectAccountOpen: open }),
+  setPreviewOpen: (open) => set({ previewOpen: open }),
   setDragOver: (over) => set({ dragOver: over }),
   setContextMenu: (open, x = 0, y = 0, fileId = null) => 
     set({ contextMenuOpen: open, contextMenuPosition: { x, y }, contextMenuFileId: fileId }),

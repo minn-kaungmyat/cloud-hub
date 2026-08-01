@@ -9,6 +9,7 @@ import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import HomePage from './pages/HomePage';
+import TrashPage from './pages/TrashPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 const router = createBrowserRouter([
@@ -39,6 +40,10 @@ const router = createBrowserRouter([
           {
             path: 'browse',
             element: <HomePage />,
+          },
+          {
+            path: 'trash',
+            element: <TrashPage />,
           },
         ],
       },

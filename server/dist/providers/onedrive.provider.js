@@ -187,13 +187,13 @@ class OneDriveProvider {
         return { files: Array.from(allFilesMap.values()), rootFolderId };
     }
     async getThumbnailLink(accessToken, refreshToken, fileId) {
-        const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/thumbnails?select=c256x256,medium,large`, {}, accessToken, refreshToken);
+        const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/thumbnails?select=c512x512,medium,large`, {}, accessToken, refreshToken);
         if (!res.ok)
             return null;
         const data = await res.json();
         if (data.value && data.value.length > 0) {
             const thumb = data.value[0];
-            return thumb['c256x256']?.url || thumb.medium?.url || thumb.large?.url || null;
+            return thumb['c512x512']?.url || thumb.medium?.url || thumb.large?.url || null;
         }
         return null;
     }

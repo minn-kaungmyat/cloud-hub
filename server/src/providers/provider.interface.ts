@@ -17,10 +17,13 @@ export interface ICloudProvider {
   listFiles(accessToken: string, refreshToken: string | null): Promise<{ files: any[]; rootFolderId: string }>;
   getThumbnailLink(accessToken: string, refreshToken: string | null, fileId: string): Promise<string | null>;
   renameFile(accessToken: string, refreshToken: string | null, fileId: string, newName: string): Promise<any>;
-  downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string): Promise<any>;
+  downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string, range?: string): Promise<any>;
   moveFile(accessToken: string, refreshToken: string | null, fileId: string, newParentId: string): Promise<any>;
   createFolder(accessToken: string, refreshToken: string | null, name: string, parentId: string): Promise<any>;
   trashFile(accessToken: string, refreshToken: string | null, fileId: string): Promise<any>;
+  restoreFile(accessToken: string, refreshToken: string | null, fileId: string): Promise<any>;
+  permanentlyDeleteFile(accessToken: string, refreshToken: string | null, fileId: string): Promise<any>;
+  emptyTrash(accessToken: string, refreshToken: string | null): Promise<any>;
   uploadFile(accessToken: string, refreshToken: string | null, name: string, mimeType: string, filePath: string, parentId: string): Promise<any>;
 
   /**

@@ -9,6 +9,7 @@ import { NewFolderModal } from '../components/NewFolderModal';
 import { SearchOverlay } from '../components/SearchOverlay';
 import { RenameModal } from '../components/RenameModal';
 import { MoveModal } from '../components/MoveModal';
+import { FilePreviewModal } from '../components/FilePreviewModal';
 
 
 const MainLayout = () => {
@@ -32,6 +33,7 @@ const MainLayout = () => {
       <SearchOverlay />
       <RenameModal />
       <MoveModal />
+      <FilePreviewModal />
     </div>
   );
 };

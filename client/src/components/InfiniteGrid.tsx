@@ -7,6 +7,7 @@ import { FileGridHeader } from './FileGridHeader';
 import type { CloudFile } from '../types';
 import type { FilesResponse } from '../hooks/useFiles';
 import { useFileStore } from '../store/fileStore';
+import { useUIStore } from '../store/uiStore';
 import type { InfiniteData } from '@tanstack/react-query';
 
 interface InfiniteGridProps {
@@ -20,6 +21,7 @@ interface InfiniteGridProps {
 export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetchingNextPage }: InfiniteGridProps) => {
   const { ref, inView } = useInView({ rootMargin: '400px' }); // Pre-fetch before they hit bottom
   const { selectedFileIds, toggleFileSelection, clearSelection, setSelectedFile, viewMode } = useFileStore();
+  const setPreviewOpen = useUIStore(s => s.setPreviewOpen);
 
   useEffect(() => {
     if (inView && hasNextPage && !isFetchingNextPage) {
@@ -27,18 +29,26 @@ export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetch
     }
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const handleClick = (e: React.MouseEvent, file: CloudFile) => {
+  const { multiSelect } = useFileStore();
+
+  const handleClick = (e: React.MouseEvent, file: CloudFile, forceToggle: boolean = false) => {
     e.stopPropagation();
-    if (e.ctrlKey || e.metaKey) {
-      toggleFileSelection(file.id);
+    const isCtrl = e.ctrlKey || e.metaKey || forceToggle;
+    const isShift = e.shiftKey;
+    const allIds = allFiles.map(f => f.id);
+    
+    if (isCtrl || isShift) {
+      multiSelect(file.id, isCtrl, isShift, allIds);
     } else {
-      setSelectedFile(file.id);
+      multiSelect(file.id, false, false, allIds);
     }
   };
 
-  // const handleDoubleClick = (_file: CloudFile) => {
-  //   // Handle preview or double click action if needed in Browse
-  // };
+  const handleDoubleClick = (file: CloudFile) => {
+    if (!file.isFolder) {
+      setPreviewOpen(true);
+    }
+  };
 
   const allFilesRaw = data?.pages.flatMap((page: FilesResponse) => page.files) || [];
   
@@ -89,7 +99,7 @@ export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetch
                 file={file}
                 selected={selectedFileIds.includes(file.id)}
                 onClick={handleClick}
-                // onDoubleClick={handleDoubleClick}
+                onDoubleClick={handleDoubleClick}
               />
             ))}
           </div>
@@ -103,6 +113,7 @@ export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetch
                 file={file} 
                 selected={selectedFileIds.includes(file.id)} 
                 onClick={handleClick}
+                onDoubleClick={handleDoubleClick}
               />
             ))}
           </div>

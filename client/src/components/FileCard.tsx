@@ -81,7 +81,7 @@ export const FileCard = ({ file, selected, onClick, onDoubleClick }: FileCardPro
         }
       }}
       className={`
-        relative group flex flex-col items-center gap-1.5 cursor-pointer p-2 rounded-md transition-all duration-200
+        relative group flex flex-col items-center gap-1.5 cursor-pointer p-2 rounded-md transition-all duration-200 select-none
         ${selected ? 'bg-zinc-800/60 ring-1 ring-zinc-700/50' : 'hover:bg-zinc-900/40'}
       `}
     >

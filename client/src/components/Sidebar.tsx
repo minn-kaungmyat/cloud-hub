@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Clock, Star, FileSearch, RefreshCw, Home } from 'lucide-react';
+import { Clock, Star, FileSearch, RefreshCw, Home, Trash2 } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { SidebarItem } from './SidebarItem';
 import { SidebarSection } from './SidebarSection';
@@ -102,6 +102,12 @@ export const Sidebar = () => {
           label="Large Files"
           active={activeItem === 'large-files'}
           onClick={() => navigate('/?account=large-files')}
+        />
+        <SidebarItem
+          icon={<Trash2 size={14} />}
+          label="Trash"
+          active={location.pathname === '/trash'}
+          onClick={() => navigate('/trash')}
         />
       </div>
 

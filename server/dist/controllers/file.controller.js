@@ -135,7 +135,12 @@ class FileController {
         const id = req.params.id;
         const userId = req.user.id;
         const result = await file_service_1.fileService.downloadFile(id, userId);
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(result.filename)}"`);
+        const isInline = req.query.inline === 'true';
+        const disposition = isInline ? 'inline' : 'attachment';
+        res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(result.filename)}"`);
+        if (result.mimeType) {
+            res.setHeader('Content-Type', result.mimeType);
+        }
         if (result.isArchive) {
             const { filesToZip, cloudAccount } = result;
             const archive = archiver('zip', { zlib: { level: 9 } });

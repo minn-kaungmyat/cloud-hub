@@ -1,7 +1,7 @@
-import { Upload, FolderPlus, Download, Trash2, X } from 'lucide-react';
+import { Upload, FolderPlus, Download, Trash2, X, RotateCcw } from 'lucide-react';
 import { useFileStore } from '../store/fileStore';
 import { useUIStore } from '../store/uiStore';
-import { useDeleteFile } from '../hooks/useFiles';
+import { useDeleteFile, useRestoreFile, usePermanentlyDeleteFile } from '../hooks/useFiles';
 
 import { useAuthStore } from '../store/authStore';
 import { useRef, useState, useEffect } from 'react';
@@ -9,10 +9,12 @@ import { useUploadStore } from '../store/uploadStore';
 import { useSearchParams } from 'react-router-dom';
 import { useActiveAccount } from '../hooks/useActiveAccount';
 
-export const FileActionBar = ({ hideNewButton = false }: { hideNewButton?: boolean }) => {
+export const FileActionBar = ({ hideNewButton = false, isTrashMode = false }: { hideNewButton?: boolean; isTrashMode?: boolean }) => {
   const { selectedFileIds, clearSelection } = useFileStore();
   const { setNewFolderOpen, openConfirm } = useUIStore();
   const { mutateAsync: deleteFile } = useDeleteFile();
+  const { mutateAsync: restoreFile } = useRestoreFile();
+  const { mutateAsync: permanentlyDeleteFile } = usePermanentlyDeleteFile();
   const { token } = useAuthStore();
 
   const count = selectedFileIds.length;
@@ -126,7 +128,7 @@ export const FileActionBar = ({ hideNewButton = false }: { hideNewButton?: boole
         <div className="mr-2" />
       )}
 
-      {count > 0 && (
+      {count > 0 && !isTrashMode && (
         <>
           <span className="text-xs text-zinc-400 mr-2 font-mono tabular-nums">{count} selected</span>
           <ActionBtn icon={<Download size={14} />} label="Download" onClick={() => {
@@ -158,6 +160,39 @@ export const FileActionBar = ({ hideNewButton = false }: { hideNewButton?: boole
                 'danger',
                 () => {
                   Promise.all(selectedFileIds.map(id => deleteFile(id))).finally(() => {
+                    clearSelection();
+                  });
+                },
+              )
+            }
+          />
+        </>
+      )}
+
+      {count > 0 && isTrashMode && (
+        <>
+          <span className="text-xs text-zinc-400 mr-2 font-mono tabular-nums">{count} selected</span>
+          <ActionBtn icon={<RotateCcw size={14} />} label="Restore" onClick={() => {
+            Promise.all(selectedFileIds.map(async id => {
+              const res = await restoreFile(id);
+              if (res?.fallbackUrl) {
+                window.open(res.fallbackUrl, '_blank');
+              }
+            })).finally(() => {
+              clearSelection();
+            });
+          }} />
+          <ActionBtn
+            icon={<Trash2 size={14} />}
+            label="Delete Forever"
+            danger
+            onClick={() =>
+              openConfirm(
+                'Permanently Delete',
+                `Are you sure you want to permanently delete ${count} file(s)? This action cannot be undone.`,
+                'danger',
+                () => {
+                  Promise.all(selectedFileIds.map(id => permanentlyDeleteFile(id))).finally(() => {
                     clearSelection();
                   });
                 },

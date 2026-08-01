@@ -65,6 +65,7 @@ model File {
   hasThumbnail     Boolean  @default(false) @map("has_thumbnail")
   isFolder         Boolean  @default(false) @map("is_folder")
   isShared         Boolean  @default(false) @map("is_shared")
+  isTrashed        Boolean  @default(false) @map("is_trashed")
 
   cloudAccountId   String   @map("cloud_account_id")
   cloudAccount     CloudAccount @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)

@@ -120,14 +120,14 @@ export class DropboxProvider implements ICloudProvider {
     const hasThumb = !isFolder && item.has_explicit_shared_members !== undefined; 
     
     return {
-      id: item.id,
+      id: item.id || item.path_lower,
       name: item.name,
       mimeType: isFolder ? 'application/vnd.google-apps.folder' : 'application/octet-stream',
       size: item.size || 0,
       parents: [item.path_lower?.split('/').slice(0, -1).join('/') || ''], 
       modifiedTime: item.server_modified || item.client_modified || new Date().toISOString(),
-      thumbnailLink: !isFolder ? 'has_thumbnail' : null, // We'll try to get thumb for all files
-      trashed: false,
+      thumbnailLink: !isFolder ? 'has_thumbnail' : null,
+      trashed: item['.tag'] === 'deleted',
       ownedByMe: true
     };
   }
@@ -146,7 +146,7 @@ export class DropboxProvider implements ICloudProvider {
         
       const body = cursor 
         ? { cursor }
-        : { path: '', recursive: true, include_deleted: false };
+        : { path: '', recursive: true, include_deleted: true };
 
       const res = await this.fetchApi(url, {
         method: 'POST',
@@ -162,10 +162,10 @@ export class DropboxProvider implements ICloudProvider {
       const data = await res.json();
       if (data.entries) {
         for (const item of data.entries) {
-          if (item['.tag'] !== 'deleted') {
-            allFilesMap.set(item.id, this.mapDropboxFileToGeneric(item));
-          } else {
-            allFilesMap.delete(item.id);
+          // Store all files, including deleted ones (which have .tag === 'deleted')
+          const mapped = this.mapDropboxFileToGeneric(item);
+          if (mapped.id) {
+            allFilesMap.set(mapped.id, mapped);
           }
         }
       }
@@ -192,6 +192,9 @@ export class DropboxProvider implements ICloudProvider {
     
     if (!res.ok) {
       const err = await res.text();
+      if (res.status === 409 && err.includes('not_found')) {
+        return null; // Silently ignore deleted files
+      }
       console.error('Dropbox thumbnail error:', res.status, err);
       return null;
     }
@@ -231,13 +234,17 @@ export class DropboxProvider implements ICloudProvider {
     const data = await res.json();
     return this.mapDropboxFileToGeneric(data.metadata);
   }
+  async downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string, range?: string) {
+    const headers: any = {
+      'Dropbox-API-Arg': JSON.stringify({ path: fileId })
+    };
+    if (range) {
+      headers.Range = range;
+    }
 
-  async downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string) {
     const res = await this.fetchApi('https://content.dropboxapi.com/2/files/download', {
       method: 'POST',
-      headers: {
-        'Dropbox-API-Arg': JSON.stringify({ path: fileId })
-      }
+      headers
     }, accessToken, refreshToken);
     
     if (!res.ok) {
@@ -325,6 +332,29 @@ export class DropboxProvider implements ICloudProvider {
     return { success: true };
   }
 
+  async restoreFile(accessToken: string, refreshToken: string | null, fileId: string) {
+    // Dropbox restore requires the file path and the rev. But if we just use the API, restore works differently.
+    // It's actually easier to use files/restore if we know the path and rev.
+    // However, if we don't have rev, we can't easily restore via ID.
+    // Let's try move_v2 or just log an error since Dropbox restore by ID isn't directly supported.
+    throw new Error('Dropbox restore is not currently supported via API due to revision requirements.');
+  }
+
+  async permanentlyDeleteFile(accessToken: string, refreshToken: string | null, fileId: string) {
+    const res = await this.fetchApi('https://api.dropboxapi.com/2/files/permanently_delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: fileId })
+    }, accessToken, refreshToken);
+
+    if (!res.ok) throw new Error('Failed to permanently delete file on Dropbox');
+    return { success: true };
+  }
+
+  async emptyTrash(accessToken: string, refreshToken: string | null) {
+    throw new Error('Dropbox does not support a single empty trash command. Files must be permanently deleted individually.');
+  }
+
   async getStartPageToken(accessToken: string, refreshToken: string | null) {
     const res = await this.fetchApi('https://api.dropboxapi.com/2/files/list_folder/get_latest_cursor', {
       method: 'POST',
@@ -356,10 +386,22 @@ export class DropboxProvider implements ICloudProvider {
       const data = await res.json();
       if (data.entries) {
         for (const item of data.entries) {
+          const isDeleted = item['.tag'] === 'deleted';
+          const resolvedId = item.id || item.path_lower;
+          
+          if (!resolvedId) continue;
+          
+          const mappedFile = isDeleted ? { id: resolvedId, trashed: true } as any : this.mapDropboxFileToGeneric(item);
+          if (isDeleted) {
+            // Dropbox does not distinguish well between soft and hard delete in list_folder
+            // We map to trashed so it shows in the Trash bin
+            mappedFile.trashed = true;
+          }
+          
           allChanges.push({
-            fileId: item.id,
-            removed: item['.tag'] === 'deleted',
-            file: item['.tag'] === 'deleted' ? null : this.mapDropboxFileToGeneric(item)
+            fileId: resolvedId,
+            removed: false, // Don't remove from DB, just mark as trashed
+            file: mappedFile
           });
         }
       }
