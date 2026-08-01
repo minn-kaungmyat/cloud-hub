@@ -1,0 +1,4 @@
+Error: Failed to get OneDrive tokens: {"error":"invalid_client","error_description":"AADSTS7000215: Invalid client secret provided. Ensure the secret being sent in the request is the client secret value, not the client secret ID, for a secret added to app 'c2932099-4639-43d9-b819-b9402cc770b7'. Trace ID: ffba0cba-e570-495b-935a-86c494590100 Correlation ID: c54fbe1e-a4da-43ab-ae88-7e53e13669d5 Timestamp: 2026-08-01 08:37:00Z","error_codes":[7000215],"timestamp":"2026-08-01 08:37:00Z","trace_id":"ffba0cba-e570-495b-935a-86c494590100","correlation_id":"c54fbe1e-a4da-43ab-ae88-7e53e13669d5","error_uri":"https://login.microsoftonline.com/error?code=7000215"}
+    at OneDriveProvider.getTokens (D:\cloud-hub\server\src\providers\onedrive.provider.ts:39:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async <anonymous> (D:\cloud-hub\server\src\controllers\cloudAccount.controller.ts:54:24)

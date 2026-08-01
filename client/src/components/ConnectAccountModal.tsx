@@ -13,8 +13,8 @@ export const ConnectAccountModal = () => {
   const { token } = useAuthStore();
 
   const handleConnect = (providerId: string) => {
-    if (providerId === 'google-drive') {
-      window.location.assign(`${import.meta.env.VITE_API_URL}/api/cloud-accounts/auth/google-drive?token=${token}`);
+    if (providerId === 'google-drive' || providerId === 'onedrive') {
+      window.location.assign(`${import.meta.env.VITE_API_URL}/api/cloud-accounts/auth/${providerId}?token=${token}`);
     } else {
       // Placeholder for others
       alert(`${providerId} integration is coming soon!`);

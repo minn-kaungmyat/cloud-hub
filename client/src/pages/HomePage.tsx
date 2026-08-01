@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FilterDrawer } from '../components/FilterDrawer';
 import { InfiniteGrid } from '../components/InfiniteGrid';
 import { CommandBar } from '../components/CommandBar';
+import { FileActionBar } from '../components/FileActionBar';
 import { Filter } from 'lucide-react';
 import { useFileStore } from '../store/fileStore';
 import { useAdvancedBrowse } from '../hooks/useFiles';
@@ -94,6 +95,8 @@ const HomePage = () => {
             </div>
           }
         />
+        
+        <FileActionBar hideNewButton />
 
         {/* Grid Area */}
         <div className="flex-1 overflow-y-auto relative">

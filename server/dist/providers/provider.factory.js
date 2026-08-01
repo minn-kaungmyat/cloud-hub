@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProviderFactory = void 0;
 const google_provider_1 = require("./google.provider");
+const onedrive_provider_1 = require("./onedrive.provider");
 const AppError_1 = require("../utils/AppError");
 class ProviderFactory {
     static getProvider(providerName) {
@@ -9,8 +10,8 @@ class ProviderFactory {
             case 'google-drive':
                 return new google_provider_1.GoogleDriveProvider();
             // Add future providers here
-            // case 'onedrive':
-            //   return new OneDriveProvider();
+            case 'onedrive':
+                return new onedrive_provider_1.OneDriveProvider();
             default:
                 throw new AppError_1.AppError(`Provider ${providerName} is not supported`, 400);
         }
