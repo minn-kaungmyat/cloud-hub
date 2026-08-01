@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useInView } from 'react-intersection-observer';
 import { Loader2 } from 'lucide-react';
 import { FileCard } from './FileCard';
@@ -40,6 +40,15 @@ export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetch
   //   // Handle preview or double click action if needed in Browse
   // };
 
+  const allFilesRaw = data?.pages.flatMap((page: FilesResponse) => page.files) || [];
+  
+  const allFiles = useMemo(() => {
+    return [...allFilesRaw].sort((a, b) => {
+      if (a.isFolder === b.isFolder) return 0;
+      return a.isFolder ? -1 : 1;
+    });
+  }, [allFilesRaw]);
+
   if (status === 'pending') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-64">
@@ -56,8 +65,6 @@ export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetch
       </div>
     );
   }
-
-  const allFiles = data?.pages.flatMap((page: FilesResponse) => page.files) || [];
 
   if (allFiles.length === 0) {
     return (
@@ -88,18 +95,16 @@ export const InfiniteGrid = ({ data, status, fetchNextPage, hasNextPage, isFetch
           </div>
         </div>
       ) : (
-        <div className="max-w-7xl mx-auto flex flex-col gap-8 pb-8">
-          <div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-              {allFiles.map((file: CloudFile) => (
-                <FileCard 
-                  key={file.id} 
-                  file={file} 
-                  selected={selectedFileIds.includes(file.id)} 
-                  onClick={handleClick}
-                />
-              ))}
-            </div>
+        <div className="max-w-7xl mx-auto pb-8">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
+            {allFiles.map((file: CloudFile) => (
+              <FileCard 
+                key={file.id} 
+                file={file} 
+                selected={selectedFileIds.includes(file.id)} 
+                onClick={handleClick}
+              />
+            ))}
           </div>
         </div>
       )}

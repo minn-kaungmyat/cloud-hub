@@ -2,7 +2,7 @@ import { useAuthStore } from '../store/authStore';
 import type { CloudFile } from '../types';
 import { MoreVertical } from 'lucide-react';
 import { FileIcon } from './FileRow';
-import { formatFileSize, formatDate } from '../utils/format';
+import { formatFileSize } from '../utils/format';
 import { useUIStore } from '../store/uiStore';
 import { useFileStore } from '../store/fileStore';
 
@@ -50,26 +50,52 @@ export const FileCard = ({ file, selected, onClick, onDoubleClick }: FileCardPro
         if (bulkMode && selectedFileIds.includes(file.id)) {
           e.dataTransfer.setData('application/json', JSON.stringify({ ids: selectedFileIds, type: 'files' }));
         } else {
-          e.dataTransfer.setData('application/json', JSON.stringify({ id: file.id, type: 'file' }));
+          e.dataTransfer.setData('application/json', JSON.stringify({ id: file.id, type: file.isFolder ? 'folder' : 'file' }));
         }
         e.dataTransfer.effectAllowed = 'move';
       }}
+      onDragOver={(e) => {
+        if (!file.isFolder) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('bg-zinc-800/80', 'ring-1', 'ring-accent/50');
+      }}
+      onDragLeave={(e) => {
+        if (!file.isFolder) return;
+        e.currentTarget.classList.remove('bg-zinc-800/80', 'ring-1', 'ring-accent/50');
+      }}
+      onDrop={(e) => {
+        if (!file.isFolder) return;
+        e.preventDefault();
+        e.currentTarget.classList.remove('bg-zinc-800/80', 'ring-1', 'ring-accent/50');
+        try {
+          const data = JSON.parse(e.dataTransfer.getData('application/json'));
+          if (data.ids) {
+            window.dispatchEvent(new CustomEvent('move-file', { detail: { fileIds: data.ids.filter((id: string) => id !== file.id), targetFolderId: file.id } }));
+          } else if (data.id && data.id !== file.id) {
+            const event = new CustomEvent('move-file', { detail: { fileIds: [data.id], targetFolderId: file.id } });
+            window.dispatchEvent(event);
+          }
+        } catch {
+          // Ignore parse errors from drag payload
+        }
+      }}
       className={`
-        relative group flex flex-col rounded-md cursor-pointer border transition-colors duration-200 overflow-hidden
-        ${selected ? 'bg-zinc-800/90 border-zinc-700 ring-1 ring-zinc-700' : 'bg-zinc-900/60 border-zinc-800/40 hover:bg-zinc-800/80 hover:border-zinc-700/60'}
+        relative group flex flex-col items-center gap-1.5 cursor-pointer p-2 rounded-md transition-all duration-200
+        ${selected ? 'bg-zinc-800/60 ring-1 ring-zinc-700/50' : 'hover:bg-zinc-900/40'}
       `}
     >
       <div 
-        className="absolute top-2 right-2 flex items-center justify-center w-7 h-7 text-zinc-500 z-10 bg-zinc-900/80 hover:bg-zinc-800 rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all border border-zinc-700/50 cursor-pointer"
+        className="absolute top-1 right-1 flex items-center justify-center w-6 h-6 text-zinc-500 z-10 bg-zinc-900/80 hover:bg-zinc-800 rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all border border-zinc-700/50 cursor-pointer"
         onClick={(e) => {
           e.stopPropagation();
           setContextMenu(true, e.clientX, e.clientY, file.id);
         }}
       >
-        <MoreVertical size={16} className="text-zinc-300" />
+        <MoreVertical size={14} className="text-zinc-300" />
       </div>
 
-      <div className="w-full aspect-video flex items-center justify-center bg-zinc-950/50 overflow-hidden relative">
+      <div className={`w-full aspect-[4/3] flex items-center justify-center rounded-lg overflow-hidden transition-transform group-hover:scale-105 ${file.isFolder ? 'bg-transparent' : 'bg-zinc-900/30 shadow-sm border border-zinc-800/30'}`}>
         {file.hasThumbnail ? (
           <img 
             src={`${import.meta.env.VITE_API_URL}/api/files/${file.id}/thumbnail?token=${token}&v=2`} 
@@ -77,16 +103,17 @@ export const FileCard = ({ file, selected, onClick, onDoubleClick }: FileCardPro
             className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
           />
         ) : (
-          <FileIcon mimeType={file.mimeType} isFolder={file.isFolder} size={48} className={file.isFolder ? 'text-accent/90' : 'text-zinc-600'} />
+          <FileIcon mimeType={file.mimeType} isFolder={file.isFolder} size={64} className={file.isFolder ? 'text-zinc-400 group-hover:text-zinc-300 transition-colors' : 'text-zinc-600'} />
         )}
       </div>
 
-      <div className="flex-1 flex flex-col p-3 border-t border-zinc-800/40">
-        <div className="text-sm font-medium text-zinc-200 truncate group-hover:text-white transition-colors">{file.name}</div>
-        <div className="text-xs text-zinc-500 mt-1 flex justify-between items-center">
-          <span>{file.isFolder ? 'Folder' : formatFileSize(file.size)}</span>
-          <span>{formatDate(file.modifiedTime)}</span>
-        </div>
+      <div className="flex flex-col items-center text-center w-full px-1">
+        <span className="text-xs font-medium text-zinc-300 truncate w-full group-hover:text-white leading-tight">
+          {file.name}
+        </span>
+        <span className="text-[10px] text-zinc-500 mt-0.5">
+          {file.isFolder ? 'Folder' : formatFileSize(file.size)}
+        </span>
       </div>
     </div>
   );

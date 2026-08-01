@@ -5,7 +5,6 @@ import { useInView } from 'react-intersection-observer';
 import { FileGridHeader } from './FileGridHeader';
 import { FileRow } from './FileRow';
 import { FileCard } from './FileCard';
-import { FolderCard } from './FolderCard';
 import { useActiveAccount } from '../hooks/useActiveAccount';
 import { EmptyState } from './EmptyState';
 import { useFileStore } from '../store/fileStore';
@@ -129,6 +128,13 @@ export const FileList = () => {
     }
   };
 
+  const sortedFiles = React.useMemo(() => {
+    return [...displayedFiles].sort((a, b) => {
+      if (a.isFolder === b.isFolder) return 0;
+      return a.isFolder ? -1 : 1;
+    });
+  }, [displayedFiles]);
+
   if (status === 'pending') {
     return (
       <div className="flex h-full items-center justify-center">
@@ -152,9 +158,6 @@ export const FileList = () => {
     return <EmptyState icon={FolderX} message="This folder is empty." />;
   }
 
-  const folders = displayedFiles.filter(f => f.isFolder);
-  const filesList = displayedFiles.filter(f => !f.isFolder);
-
   return (
     <div 
       className="flex-1 overflow-y-auto h-full p-4 md:p-6"
@@ -164,7 +167,7 @@ export const FileList = () => {
         <div className="max-w-5xl mx-auto">
           <FileGridHeader />
           <div className="pb-4">
-            {displayedFiles.map((file) => (
+            {sortedFiles.map((file) => (
               <FileRow
                 key={file.id}
                 file={file}
@@ -176,38 +179,18 @@ export const FileList = () => {
           </div>
         </div>
       ) : (
-        <div className="max-w-7xl mx-auto flex flex-col gap-8 pb-8">
-          {folders.length > 0 && (
-            <div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {folders.map((folder) => (
-                  <FolderCard
-                    key={folder.id}
-                    file={folder}
-                    selected={folder.id === selectedFileId || selectedFileIds.includes(folder.id)}
-                    onClick={handleClick}
-                    onDoubleClick={handleDoubleClick}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {filesList.length > 0 && (
-            <div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-                {filesList.map((file) => (
-                  <FileCard
-                    key={file.id}
-                    file={file}
-                    selected={file.id === selectedFileId || selectedFileIds.includes(file.id)}
-                    onClick={handleClick}
-                    onDoubleClick={handleDoubleClick}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+        <div className="max-w-7xl mx-auto pb-8">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
+            {sortedFiles.map((file) => (
+              <FileCard
+                key={file.id}
+                file={file}
+                selected={file.id === selectedFileId || selectedFileIds.includes(file.id)}
+                onClick={handleClick}
+                onDoubleClick={handleDoubleClick}
+              />
+            ))}
+          </div>
         </div>
       )}
       
