@@ -36,15 +36,15 @@ const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <AccountPage />,
+            element: <HomePage />,
           },
           {
             path: 'settings',
             element: <SettingsPage />,
           },
           {
-            path: 'browse',
-            element: <HomePage />,
+            path: 'drive',
+            element: <AccountPage />,
           },
           {
             path: 'trash',

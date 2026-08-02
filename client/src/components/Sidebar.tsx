@@ -19,10 +19,10 @@ export const Sidebar = () => {
   const activeItem = useActiveAccount();
 
   useEffect(() => {
-    if (location.pathname === '/' && accounts.length > 0) {
+    if (location.pathname === '/drive' && accounts.length > 0) {
       const validCollections = ['recent', 'favorites', 'large-files'];
       if (!validCollections.includes(activeItem) && !accounts.some(a => a.id === activeItem)) {
-        navigate('/browse', { replace: true });
+        navigate('/', { replace: true });
       }
     }
   }, [location.pathname, accounts, activeItem, navigate]);
@@ -44,8 +44,8 @@ export const Sidebar = () => {
         <SidebarItem
           icon={<Home size={14} />}
           label="Home"
-          active={location.pathname === '/browse'}
-          onClick={() => navigate('/browse')}
+          active={location.pathname === '/'}
+          onClick={() => navigate('/')}
         />
 
         <SidebarSection label="Locations" />
@@ -58,7 +58,7 @@ export const Sidebar = () => {
               icon={<ProviderIcon provider={account.provider} size={14} className="" />}
               label={account.label}
               sublabel={account.email}
-              active={activeItem === account.id}
+              active={activeItem === account.id && location.pathname === '/drive'}
               suffix={
                 <div className="flex items-center gap-1.5">
                   <button
@@ -78,7 +78,7 @@ export const Sidebar = () => {
                   <StatusBadge status={account.status} />
                 </div>
               }
-              onClick={() => navigate(`/?account=${account.id}`)}
+              onClick={() => navigate(`/drive?account=${account.id}`)}
             />
           ))
         )}
@@ -88,20 +88,20 @@ export const Sidebar = () => {
         <SidebarItem
           icon={<Clock size={14} />}
           label="Recent"
-          active={activeItem === 'recent'}
-          onClick={() => navigate('/?account=recent')}
+          active={activeItem === 'recent' && location.pathname === '/drive'}
+          onClick={() => navigate('/drive?account=recent')}
         />
         <SidebarItem
           icon={<Star size={14} />}
           label="Favorites"
-          active={activeItem === 'favorites'}
-          onClick={() => navigate('/?account=favorites')}
+          active={activeItem === 'favorites' && location.pathname === '/drive'}
+          onClick={() => navigate('/drive?account=favorites')}
         />
         <SidebarItem
           icon={<FileSearch size={14} />}
           label="Large Files"
-          active={activeItem === 'large-files'}
-          onClick={() => navigate('/?account=large-files')}
+          active={activeItem === 'large-files' && location.pathname === '/drive'}
+          onClick={() => navigate('/drive?account=large-files')}
         />
         <SidebarItem
           icon={<Trash2 size={14} />}
