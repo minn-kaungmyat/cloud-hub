@@ -297,10 +297,17 @@ export class OneDriveProvider implements ICloudProvider {
       if (data.value) {
         for (const item of data.value) {
           const isHardDeleted = item.deleted ? item.deleted.state === 'hardDeleted' : false;
-          const mappedFile = this.mapGraphFileToGeneric(item);
+          
           if (item.deleted && !isHardDeleted) {
-            mappedFile.trashed = true;
+            allChanges.push({
+              fileId: item.id,
+              removed: false,
+              file: { id: item.id, trashed: true }
+            });
+            continue;
           }
+
+          const mappedFile = this.mapGraphFileToGeneric(item);
           
           allChanges.push({
             fileId: item.id,

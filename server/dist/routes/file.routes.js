@@ -21,4 +21,7 @@ router.patch('/:id/rename', file_controller_1.fileController.renameFile);
 router.patch('/:id/move', file_controller_1.fileController.moveFile);
 router.get('/:id/download', file_controller_1.fileController.downloadFile);
 router.delete('/:id', file_controller_1.fileController.deleteFile);
+router.post('/trash/empty', file_controller_1.fileController.emptyTrash);
+router.post('/:id/restore', file_controller_1.fileController.restoreFile);
+router.delete('/:id/permanent', file_controller_1.fileController.permanentlyDeleteFile);
 exports.default = router;

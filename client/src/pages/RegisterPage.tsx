@@ -118,6 +118,12 @@ const RegisterPage = () => {
           Already have an account?{' '}
           <Link to="/login" className="text-accent hover:underline">Sign in</Link>
         </p>
+
+        <div className="mt-12 text-center">
+          <Link to="/privacy" className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors uppercase tracking-widest">
+            Privacy Policy
+          </Link>
+        </div>
       </div>
     </div>
   );

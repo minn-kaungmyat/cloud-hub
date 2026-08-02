@@ -8,6 +8,9 @@ import { useRef, useState, useEffect } from 'react';
 import { useUploadStore } from '../store/uploadStore';
 import { useSearchParams } from 'react-router-dom';
 import { useActiveAccount } from '../hooks/useActiveAccount';
+import { PartialRestoreModal } from './PartialRestoreModal';
+import { useQueryClient } from '@tanstack/react-query';
+import type { CloudFile } from '../types';
 
 export const FileActionBar = ({ hideNewButton = false, isTrashMode = false }: { hideNewButton?: boolean; isTrashMode?: boolean }) => {
   const { selectedFileIds, clearSelection } = useFileStore();
@@ -16,6 +19,10 @@ export const FileActionBar = ({ hideNewButton = false, isTrashMode = false }: { 
   const { mutateAsync: restoreFile } = useRestoreFile();
   const { mutateAsync: permanentlyDeleteFile } = usePermanentlyDeleteFile();
   const { token } = useAuthStore();
+  
+  const queryClient = useQueryClient();
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [filesToRestore, setFilesToRestore] = useState<CloudFile[]>([]);
 
   const count = selectedFileIds.length;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -173,14 +180,32 @@ export const FileActionBar = ({ hideNewButton = false, isTrashMode = false }: { 
         <>
           <span className="text-xs text-zinc-400 mr-2 font-mono tabular-nums">{count} selected</span>
           <ActionBtn icon={<RotateCcw size={14} />} label="Restore" onClick={() => {
-            Promise.all(selectedFileIds.map(async id => {
-              const res = await restoreFile(id);
-              if (res?.fallbackUrl) {
-                window.open(res.fallbackUrl, '_blank');
-              }
-            })).finally(() => {
-              clearSelection();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const fileQueries = queryClient.getQueriesData<any>({ 
+              predicate: (query) => ['files', 'search', 'browse'].includes(query.queryKey[0] as string)
             });
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const allFiles = fileQueries.flatMap(([, data]) => (data?.pages ? data.pages.flatMap((p: any) => p.files) : []));
+            
+            const resolvedFiles: CloudFile[] = [];
+            selectedFileIds.forEach(id => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const file = allFiles.find((f: any) => f.id === id);
+              if (file) resolvedFiles.push(file as CloudFile);
+            });
+
+            if (resolvedFiles.some(f => f.provider !== 'google-drive')) {
+              setFilesToRestore(resolvedFiles);
+              setRestoreModalOpen(true);
+            } else {
+              // Only Google Drive files, restore instantly
+              Promise.all(resolvedFiles.map(async f => {
+                await restoreFile(f.id);
+                // Deselect only the restored files
+                const currentSelection = useFileStore.getState().selectedFileIds;
+                useFileStore.setState({ selectedFileIds: currentSelection.filter(id => id !== f.id) });
+              }));
+            }
           }} />
           <ActionBtn
             icon={<Trash2 size={14} />}
@@ -209,6 +234,20 @@ export const FileActionBar = ({ hideNewButton = false, isTrashMode = false }: { 
           <X size={14} />
         </button>
       )}
+
+      <PartialRestoreModal
+        isOpen={restoreModalOpen}
+        onClose={() => setRestoreModalOpen(false)}
+        filesToRestore={filesToRestore}
+        onConfirm={() => {
+          const googleFiles = filesToRestore.filter(f => f.provider === 'google-drive');
+          Promise.all(googleFiles.map(async f => {
+            await restoreFile(f.id);
+            const currentSelection = useFileStore.getState().selectedFileIds;
+            useFileStore.setState({ selectedFileIds: currentSelection.filter(id => id !== f.id) });
+          }));
+        }}
+      />
     </div>
   );
 };

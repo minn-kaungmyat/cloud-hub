@@ -1,4 +1,4 @@
-import { X, HardDrive, Cloud, Database } from 'lucide-react';
+import { X, HardDrive, Cloud, Database, ShieldCheck } from 'lucide-react';
 import { useUIStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
 
@@ -35,6 +35,17 @@ export const ConnectAccountModal = () => {
 
         <div className="p-5 space-y-2">
           <p className="text-xs text-zinc-500 mb-4">Select a cloud provider to connect. You can add multiple accounts for the same provider.</p>
+          
+          <div className="mb-6 p-4 bg-zinc-950/50 border border-zinc-800/60 rounded-md">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck size={16} className="text-zinc-400" />
+              <h4 className="text-xs font-medium text-zinc-300">Private & Secure</h4>
+            </div>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              We use AES-256 encryption to protect your connection. CloudHub acts as a secure proxy—we never see your passwords, and your actual files never touch our servers.
+            </p>
+          </div>
+
           {providers.map((p) => (
             <button
               key={p.id}

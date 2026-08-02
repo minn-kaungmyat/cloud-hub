@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import HomePage from './pages/HomePage';
 import TrashPage from './pages/TrashPage';
+import PrivacyPage from './pages/PrivacyPage';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 const router = createBrowserRouter([
@@ -20,6 +21,10 @@ const router = createBrowserRouter([
   {
     path: '/register',
     element: <RegisterPage />,
+  },
+  {
+    path: '/privacy',
+    element: <PrivacyPage />,
   },
   {
     path: '/',

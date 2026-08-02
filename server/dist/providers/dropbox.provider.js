@@ -141,14 +141,14 @@ class DropboxProvider {
         const isFolder = item['.tag'] === 'folder';
         const hasThumb = !isFolder && item.has_explicit_shared_members !== undefined;
         return {
-            id: item.id,
+            id: item.id || item.path_lower,
             name: item.name,
             mimeType: isFolder ? 'application/vnd.google-apps.folder' : 'application/octet-stream',
             size: item.size || 0,
             parents: [item.path_lower?.split('/').slice(0, -1).join('/') || ''],
             modifiedTime: item.server_modified || item.client_modified || new Date().toISOString(),
-            thumbnailLink: !isFolder ? 'has_thumbnail' : null, // We'll try to get thumb for all files
-            trashed: false,
+            thumbnailLink: !isFolder ? 'has_thumbnail' : null,
+            trashed: item['.tag'] === 'deleted',
             ownedByMe: true
         };
     }
@@ -163,7 +163,7 @@ class DropboxProvider {
                 : 'https://api.dropboxapi.com/2/files/list_folder';
             const body = cursor
                 ? { cursor }
-                : { path: '', recursive: true, include_deleted: false };
+                : { path: '', recursive: true, include_deleted: true };
             const res = await this.fetchApi(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -176,11 +176,10 @@ class DropboxProvider {
             const data = await res.json();
             if (data.entries) {
                 for (const item of data.entries) {
-                    if (item['.tag'] !== 'deleted') {
-                        allFilesMap.set(item.id, this.mapDropboxFileToGeneric(item));
-                    }
-                    else {
-                        allFilesMap.delete(item.id);
+                    // Store all files, including deleted ones (which have .tag === 'deleted')
+                    const mapped = this.mapDropboxFileToGeneric(item);
+                    if (mapped.id) {
+                        allFilesMap.set(mapped.id, mapped);
                     }
                 }
             }
@@ -203,6 +202,9 @@ class DropboxProvider {
         }, accessToken, refreshToken);
         if (!res.ok) {
             const err = await res.text();
+            if (res.status === 409 && err.includes('not_found')) {
+                return null; // Silently ignore deleted files
+            }
             console.error('Dropbox thumbnail error:', res.status, err);
             return null;
         }
@@ -238,12 +240,16 @@ class DropboxProvider {
         const data = await res.json();
         return this.mapDropboxFileToGeneric(data.metadata);
     }
-    async downloadFileStream(accessToken, refreshToken, fileId, mimeType) {
+    async downloadFileStream(accessToken, refreshToken, fileId, mimeType, range) {
+        const headers = {
+            'Dropbox-API-Arg': JSON.stringify({ path: fileId })
+        };
+        if (range) {
+            headers.Range = range;
+        }
         const res = await this.fetchApi('https://content.dropboxapi.com/2/files/download', {
             method: 'POST',
-            headers: {
-                'Dropbox-API-Arg': JSON.stringify({ path: fileId })
-            }
+            headers
         }, accessToken, refreshToken);
         if (!res.ok) {
             throw new Error(`Failed to download file from Dropbox: ${res.statusText}`);
@@ -321,6 +327,26 @@ class DropboxProvider {
             throw new Error('Failed to delete file on Dropbox');
         return { success: true };
     }
+    async restoreFile(accessToken, refreshToken, fileId) {
+        // Dropbox restore requires the file path and the rev. But if we just use the API, restore works differently.
+        // It's actually easier to use files/restore if we know the path and rev.
+        // However, if we don't have rev, we can't easily restore via ID.
+        // Fallback to Dropbox web interface for deleted files.
+        return { fallbackUrl: 'https://www.dropbox.com/deleted_files' };
+    }
+    async permanentlyDeleteFile(accessToken, refreshToken, fileId) {
+        const res = await this.fetchApi('https://api.dropboxapi.com/2/files/permanently_delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: fileId })
+        }, accessToken, refreshToken);
+        if (!res.ok)
+            throw new Error('Failed to permanently delete file on Dropbox');
+        return { success: true };
+    }
+    async emptyTrash(accessToken, refreshToken) {
+        throw new Error('Dropbox does not support a single empty trash command. Files must be permanently deleted individually.');
+    }
     async getStartPageToken(accessToken, refreshToken) {
         const res = await this.fetchApi('https://api.dropboxapi.com/2/files/list_folder/get_latest_cursor', {
             method: 'POST',
@@ -349,10 +375,20 @@ class DropboxProvider {
             const data = await res.json();
             if (data.entries) {
                 for (const item of data.entries) {
+                    const isDeleted = item['.tag'] === 'deleted';
+                    const resolvedId = item.id || item.path_lower;
+                    if (!resolvedId)
+                        continue;
+                    const mappedFile = isDeleted ? { id: resolvedId, trashed: true } : this.mapDropboxFileToGeneric(item);
+                    if (isDeleted) {
+                        // Dropbox does not distinguish well between soft and hard delete in list_folder
+                        // We map to trashed so it shows in the Trash bin
+                        mappedFile.trashed = true;
+                    }
                     allChanges.push({
-                        fileId: item.id,
-                        removed: item['.tag'] === 'deleted',
-                        file: item['.tag'] === 'deleted' ? null : this.mapDropboxFileToGeneric(item)
+                        fileId: resolvedId,
+                        removed: false, // Don't remove from DB, just mark as trashed
+                        file: mappedFile
                     });
                 }
             }
@@ -383,17 +419,18 @@ class DropboxProvider {
         let position = 0;
         let sessionId = '';
         try {
-            if (fileSize === 0) {
+            if (fileSize <= CHUNK_SIZE) {
+                const fileContent = fs_1.default.readFileSync(filePath);
                 const simpleRes = await this.fetchApi('https://content.dropboxapi.com/2/files/upload', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/octet-stream',
                         'Dropbox-API-Arg': JSON.stringify({ path: uploadPath, mode: 'add', autorename: true })
                     },
-                    body: Buffer.from('')
+                    body: fileContent
                 }, accessToken, refreshToken);
                 if (!simpleRes.ok)
-                    throw new Error('Failed to upload empty file');
+                    throw new Error('Failed to upload file');
                 const data = await simpleRes.json();
                 return this.mapDropboxFileToGeneric(data);
             }

@@ -85,7 +85,8 @@ class FileService {
                         modifiedTime: f.modifiedTime ? new Date(f.modifiedTime) : new Date(),
                         hasThumbnail: !!f.thumbnailLink,
                         isFolder: f.mimeType === 'application/vnd.google-apps.folder',
-                        isShared: f.ownedByMe === false, // NOT owned by me = shared with me
+                        isShared: f.ownedByMe === false,
+                        isTrashed: f.trashed === true,
                         cloudAccountId: account.id,
                     };
                 });
@@ -112,10 +113,9 @@ class FileService {
                 data.forEach(f => getDepth(f.id));
                 data.sort((a, b) => depths.get(a.id) - depths.get(b.id));
                 if (data.length > 0) {
-                    // Chunk inserts to avoid PostgreSQL parameter limit (65535)
-                    const chunkSize = 1000;
-                    for (let i = 0; i < data.length; i += chunkSize) {
-                        const chunk = data.slice(i, i + chunkSize);
+                    const CHUNK_SIZE = 1000;
+                    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+                        const chunk = data.slice(i, i + CHUNK_SIZE);
                         await tx.file.createMany({
                             data: chunk,
                         });
@@ -172,7 +172,7 @@ class FileService {
                 await prisma_1.prisma.$transaction(async (tx) => {
                     for (const change of changes) {
                         const providerFileId = change.fileId;
-                        if (change.removed || (change.file && change.file.trashed)) {
+                        if (change.removed) {
                             if (providerFileId) {
                                 await tx.file.deleteMany({
                                     where: { cloudAccountId: account.id, providerFileId }
@@ -192,16 +192,25 @@ class FileService {
                             const data = {
                                 providerFileId: f.id,
                                 provider: account.provider,
-                                name: f.name,
-                                mimeType: f.mimeType,
-                                size: f.size ? BigInt(f.size) : BigInt(0),
-                                parentId,
-                                modifiedTime: f.modifiedTime ? new Date(f.modifiedTime) : new Date(),
-                                hasThumbnail: !!f.thumbnailLink,
-                                isFolder: f.mimeType === 'application/vnd.google-apps.folder',
-                                isShared: f.ownedByMe === false,
+                                isTrashed: f.trashed === true,
                                 cloudAccountId: account.id,
                             };
+                            if (f.name !== undefined)
+                                data.name = f.name;
+                            if (f.mimeType !== undefined)
+                                data.mimeType = f.mimeType;
+                            if (f.size !== undefined)
+                                data.size = f.size ? BigInt(f.size) : BigInt(0);
+                            if (parentId !== undefined)
+                                data.parentId = parentId;
+                            if (f.modifiedTime !== undefined)
+                                data.modifiedTime = f.modifiedTime ? new Date(f.modifiedTime) : new Date();
+                            if (f.thumbnailLink !== undefined)
+                                data.hasThumbnail = !!f.thumbnailLink;
+                            if (f.mimeType !== undefined)
+                                data.isFolder = f.mimeType === 'application/vnd.google-apps.folder';
+                            if (f.ownedByMe !== undefined)
+                                data.isShared = f.ownedByMe === false;
                             const existing = await tx.file.findFirst({
                                 where: { cloudAccountId: account.id, providerFileId }
                             });
@@ -212,6 +221,9 @@ class FileService {
                                 });
                             }
                             else {
+                                // If it doesn't exist but it's trashed with no name, skip it
+                                if (!f.name)
+                                    continue;
                                 const newId = (0, uuid_1.v4)();
                                 await tx.file.create({ data: { id: newId, ...data } });
                                 validIds.set(providerFileId, newId);
@@ -254,6 +266,7 @@ class FileService {
         }
         const whereClause = {
             cloudAccountId: { in: accountIds },
+            isTrashed: false,
         };
         if (folderId === 'root') {
             whereClause.parentId = null;
@@ -305,6 +318,7 @@ class FileService {
         const accountIds = accounts.map(a => a.id);
         let whereClause = {
             cloudAccountId: { in: accountIds },
+            isTrashed: filters.isTrashed || false,
         };
         // 2. Filter by Type
         if (filters.type) {
@@ -350,7 +364,9 @@ class FileService {
         whereClause.cloudAccountId.in = validAccountIds;
         // We only want files in browse mode, not folders (usually, or we can make it optional)
         // Actually, DAMs usually show files. We will filter out folders unless requested.
-        whereClause.isFolder = false;
+        if (!filters.isTrashed) {
+            whereClause.isFolder = false;
+        }
         // 5. Determine Sorting
         let orderByClause = { modifiedTime: 'desc' }; // default
         if (filters.sortBy === 'date')
@@ -395,7 +411,8 @@ class FileService {
         const files = await prisma_1.prisma.file.findMany({
             where: {
                 cloudAccountId: { in: accountIds },
-                name: { contains: query, mode: 'insensitive' }
+                name: { contains: query, mode: 'insensitive' },
+                isTrashed: false,
             },
             take: limit + 1,
             skip: cursor ? 1 : 0,
@@ -496,7 +513,7 @@ class FileService {
             size: Number(updatedFile.size)
         };
     }
-    async downloadFile(id, userId) {
+    async downloadFile(id, userId, range) {
         const file = await prisma_1.prisma.file.findUnique({
             where: { id },
             include: { cloudAccount: true }
@@ -535,7 +552,7 @@ class FileService {
         }
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
-            const streamResponse = await provider.downloadFileStream((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, file.mimeType);
+            const streamResponse = await provider.downloadFileStream((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, file.mimeType, range);
             let finalName = file.name;
             if (cloudAccount.provider === 'google-drive') {
                 if (file.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {
@@ -551,7 +568,10 @@ class FileService {
             return {
                 stream: streamResponse.data,
                 filename: finalName,
-                mimeType: file.mimeType
+                mimeType: file.mimeType,
+                status: streamResponse.status,
+                headers: streamResponse.headers || {},
+                size: Number(file.size)
             };
         }
         catch (error) {
@@ -751,9 +771,10 @@ class FileService {
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
             await provider.trashFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId);
-            // Delete local DB record
-            await prisma_1.prisma.file.delete({
-                where: { id }
+            // Soft delete local DB record
+            await prisma_1.prisma.file.update({
+                where: { id },
+                data: { isTrashed: true }
             });
             return { success: true };
         }
@@ -763,6 +784,101 @@ class FileService {
             }
             throw new AppError_1.AppError(error.message || `Failed to delete file on ${cloudAccount.provider}`, 500);
         }
+    }
+    async restoreFile(id, userId) {
+        const file = await prisma_1.prisma.file.findUnique({
+            where: { id },
+            include: { cloudAccount: true }
+        });
+        if (!file)
+            throw new AppError_1.AppError('File not found', 404);
+        if (file.cloudAccount.userId !== userId)
+            throw new AppError_1.AppError('Unauthorized', 403);
+        const { cloudAccount } = file;
+        if (!(0, crypto_1.decryptToken)(cloudAccount.accessToken))
+            throw new AppError_1.AppError('Account not authenticated', 401);
+        try {
+            const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
+            const res = await provider.restoreFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId);
+            // If it's OneDrive and returned a fallback, we keep it trashed locally until sync? 
+            // Actually, if we return a fallbackUrl, we don't update local state, because the user has to do it manually.
+            if (res && res.fallbackUrl) {
+                return res;
+            }
+            await prisma_1.prisma.file.update({
+                where: { id },
+                data: { isTrashed: false }
+            });
+            return { success: true };
+        }
+        catch (error) {
+            throw new AppError_1.AppError(error.message || `Failed to restore file on ${cloudAccount.provider}`, 500);
+        }
+    }
+    async permanentlyDeleteFile(id, userId) {
+        const file = await prisma_1.prisma.file.findUnique({
+            where: { id },
+            include: { cloudAccount: true }
+        });
+        if (!file)
+            throw new AppError_1.AppError('File not found', 404);
+        if (file.cloudAccount.userId !== userId)
+            throw new AppError_1.AppError('Unauthorized', 403);
+        const { cloudAccount } = file;
+        if (!(0, crypto_1.decryptToken)(cloudAccount.accessToken))
+            throw new AppError_1.AppError('Account not authenticated', 401);
+        try {
+            const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
+            await provider.permanentlyDeleteFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId);
+            await prisma_1.prisma.file.delete({
+                where: { id }
+            });
+            return { success: true };
+        }
+        catch (error) {
+            throw new AppError_1.AppError(error.message || `Failed to permanently delete file on ${cloudAccount.provider}`, 500);
+        }
+    }
+    async emptyTrash(userId, providerNames) {
+        if (!providerNames || providerNames.length === 0)
+            return { success: true };
+        const accounts = await prisma_1.prisma.cloudAccount.findMany({
+            where: { userId, provider: { in: providerNames } }
+        });
+        for (const account of accounts) {
+            const accessToken = (0, crypto_1.decryptToken)(account.accessToken);
+            if (!accessToken)
+                continue;
+            const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
+            try {
+                if (account.provider === 'google-drive') {
+                    // Google supports empty trash natively
+                    await provider.emptyTrash(accessToken, (0, crypto_1.decryptToken)(account.refreshToken));
+                    await prisma_1.prisma.file.deleteMany({
+                        where: { cloudAccountId: account.id, isTrashed: true }
+                    });
+                }
+                else {
+                    // Others need individual deletion
+                    const trashedFiles = await prisma_1.prisma.file.findMany({
+                        where: { cloudAccountId: account.id, isTrashed: true }
+                    });
+                    for (const f of trashedFiles) {
+                        try {
+                            await provider.permanentlyDeleteFile(accessToken, (0, crypto_1.decryptToken)(account.refreshToken), f.providerFileId);
+                            await prisma_1.prisma.file.delete({ where: { id: f.id } });
+                        }
+                        catch (err) {
+                            console.error(`Failed to permanently delete ${f.id} on ${account.provider}`, err);
+                        }
+                    }
+                }
+            }
+            catch (err) {
+                console.error(`Failed to empty trash for ${account.provider}`, err);
+            }
+        }
+        return { success: true };
     }
     async uploadFile(accountId, parentId, filePath, originalName, mimeType, size, userId) {
         const account = await prisma_1.prisma.cloudAccount.findUnique({

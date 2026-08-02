@@ -336,8 +336,8 @@ export class DropboxProvider implements ICloudProvider {
     // Dropbox restore requires the file path and the rev. But if we just use the API, restore works differently.
     // It's actually easier to use files/restore if we know the path and rev.
     // However, if we don't have rev, we can't easily restore via ID.
-    // Let's try move_v2 or just log an error since Dropbox restore by ID isn't directly supported.
-    throw new Error('Dropbox restore is not currently supported via API due to revision requirements.');
+    // Fallback to Dropbox web interface for deleted files.
+    return { fallbackUrl: 'https://www.dropbox.com/deleted_files' };
   }
 
   async permanentlyDeleteFile(accessToken: string, refreshToken: string | null, fileId: string) {
@@ -445,17 +445,18 @@ export class DropboxProvider implements ICloudProvider {
     let sessionId = '';
 
     try {
-      if (fileSize === 0) {
+      if (fileSize <= CHUNK_SIZE) {
+        const fileContent = fs.readFileSync(filePath);
         const simpleRes = await this.fetchApi('https://content.dropboxapi.com/2/files/upload', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/octet-stream',
             'Dropbox-API-Arg': JSON.stringify({ path: uploadPath, mode: 'add', autorename: true })
           },
-          body: Buffer.from('')
+          body: fileContent
         }, accessToken, refreshToken);
         
-        if (!simpleRes.ok) throw new Error('Failed to upload empty file');
+        if (!simpleRes.ok) throw new Error('Failed to upload file');
         const data = await simpleRes.json();
         return this.mapDropboxFileToGeneric(data);
       }

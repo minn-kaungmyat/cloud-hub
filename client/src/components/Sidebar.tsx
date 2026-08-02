@@ -112,9 +112,12 @@ export const Sidebar = () => {
       </div>
 
       {/* Footer (User Profile) */}
-      <div className="mt-auto border-t border-zinc-800/60 pt-2 pb-3 shrink-0">
+      <div className="mt-auto border-t border-zinc-800/60 pt-2 pb-3 shrink-0 flex flex-col">
         <div className="px-2 mt-2">
           <UserMenu />
+        </div>
+        <div className="px-4 mt-3 flex justify-center text-[10px] text-zinc-600">
+          <button onClick={() => navigate('/privacy')} className="hover:text-zinc-400 transition-colors">Privacy Policy</button>
         </div>
       </div>
     </aside>

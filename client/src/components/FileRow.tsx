@@ -7,6 +7,8 @@ import { FileCheckbox } from './FileCheckbox';
 import { useFileStore } from '../store/fileStore';
 import { useUIStore } from '../store/uiStore';
 import { MoreVertical } from 'lucide-react';
+import { ProviderIcon, getProviderLabel } from './ProviderIcon';
+import { useLocation } from 'react-router-dom';
 
 function getFileIcon(mimeType: string, isFolder: boolean): LucideIcon {
   if (isFolder) return Folder;
@@ -37,6 +39,7 @@ export const FileRow = ({ file, selected, onClick, onDoubleClick }: FileRowProps
   const { bulkMode, selectedFileIds, setSelectedFile } = useFileStore();
   const setContextMenu = useUIStore((s) => s.setContextMenu);
   const isChecked = selectedFileIds.includes(file.id);
+  const location = useLocation();
 
   return (
     <div
@@ -127,6 +130,13 @@ export const FileRow = ({ file, selected, onClick, onDoubleClick }: FileRowProps
           }}
         />
       </div>
+
+      {location.pathname === '/trash' && (
+        <div className="w-32 shrink-0 flex items-center gap-2 text-zinc-400 text-xs">
+          <ProviderIcon provider={file.provider} size={14} className="text-zinc-500" />
+          <span className="truncate">{getProviderLabel(file.provider)}</span>
+        </div>
+      )}
 
       <div className="w-24 shrink-0 font-mono text-zinc-400 tabular-nums text-xs text-right">
         {formatFileSize(file.size)}

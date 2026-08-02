@@ -134,12 +134,40 @@ class FileController {
     downloadFile = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         const id = req.params.id;
         const userId = req.user.id;
-        const result = await file_service_1.fileService.downloadFile(id, userId);
+        const range = req.headers.range;
+        const result = await file_service_1.fileService.downloadFile(id, userId, range);
         const isInline = req.query.inline === 'true';
         const disposition = isInline ? 'inline' : 'attachment';
         res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(result.filename)}"`);
         if (result.mimeType) {
             res.setHeader('Content-Type', result.mimeType);
+        }
+        res.setHeader('Accept-Ranges', 'bytes');
+        let isPartial = false;
+        if (range && result.size) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const size = result.size;
+            const end = parts[1] ? parseInt(parts[1], 10) : size - 1;
+            const chunksize = (end - start) + 1;
+            res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+            res.setHeader('Content-Length', chunksize);
+            res.status(206);
+            isPartial = true;
+        }
+        else if (result.size) {
+            res.setHeader('Content-Length', result.size);
+        }
+        if (result.headers) {
+            if (!isPartial && (result.headers['content-range'] || result.headers['Content-Range'])) {
+                res.setHeader('Content-Range', result.headers['content-range'] || result.headers['Content-Range']);
+            }
+            if (!res.getHeader('Content-Length') && (result.headers['content-length'] || result.headers['Content-Length'])) {
+                res.setHeader('Content-Length', result.headers['content-length'] || result.headers['Content-Length']);
+            }
+        }
+        if (result.status === 206 && !isPartial) {
+            res.status(206);
         }
         if (result.isArchive) {
             const { filesToZip, cloudAccount } = result;
@@ -232,6 +260,24 @@ class FileController {
         const id = req.params.id;
         const userId = req.user.id;
         await file_service_1.fileService.deleteFile(id, userId);
+        res.status(204).send();
+    });
+    restoreFile = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+        const id = req.params.id;
+        const userId = req.user.id;
+        const result = await file_service_1.fileService.restoreFile(id, userId);
+        res.status(200).json({ status: 'success', data: result });
+    });
+    permanentlyDeleteFile = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+        const id = req.params.id;
+        const userId = req.user.id;
+        await file_service_1.fileService.permanentlyDeleteFile(id, userId);
+        res.status(204).send();
+    });
+    emptyTrash = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+        const userId = req.user.id;
+        const { providerNames } = req.body;
+        await file_service_1.fileService.emptyTrash(userId, providerNames);
         res.status(204).send();
     });
     uploadFile = (0, asyncHandler_1.asyncHandler)(async (req, res) => {

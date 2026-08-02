@@ -33,7 +33,7 @@ export const AccountCard = ({ account }: { account: CloudAccount }) => {
       icon: <Unlink size={14} />, 
       danger: true, 
       onClick: () => {
-        if (confirm('Are you sure you want to disconnect this account?')) {
+        if (confirm('Are you sure you want to disconnect this account? This will immediately wipe your encrypted tokens and all synced metadata from our database permanently.')) {
           disconnectMutation.mutate();
         }
       } 

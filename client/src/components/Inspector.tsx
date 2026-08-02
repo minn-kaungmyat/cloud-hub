@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Download, Trash2, File, Edit3, FolderInput, X } from 'lucide-react';
 import { IconButton } from './IconButton';
 import { MetadataRow } from './MetadataRow';
@@ -20,13 +21,17 @@ export const Inspector = () => {
   const file = useFileFromCache(selectedFileId);
   const { mutate: deleteFile } = useDeleteFile();
   const account = file ? accounts.find(a => a.id === file.cloudAccountId) : null;
+  const [errorFileId, setErrorFileId] = useState<string | null>(null);
+  const imgError = file ? errorFileId === file.id : false;
 
   return (
     <aside className={`flex flex-col border-zinc-800/60 bg-zinc-950 shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${inspectorOpen ? 'w-[320px] border-l opacity-100' : 'w-0 border-transparent opacity-0'}`}>
-      <div className="h-12 flex items-center justify-between px-4 border-b border-zinc-800/60 font-medium text-sm text-zinc-200 w-[320px] shrink-0">
-        Inspector
-        <button onClick={toggleInspector} className="text-zinc-500 hover:text-zinc-300">
-          <X size={16} />
+      <div className="flex items-center justify-between p-4 border-b border-zinc-800/60">
+        <h2 className="font-semibold text-zinc-100 flex items-center gap-2">
+          Inspector
+        </h2>
+        <button onClick={toggleInspector} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+          <X size={18} />
         </button>
       </div>
 
@@ -40,11 +45,12 @@ export const Inspector = () => {
           <div className="flex-1 overflow-y-auto p-4 w-[320px]">
             {/* Preview thumbnail */}
             <div className="aspect-video bg-zinc-950/50 rounded-sm mb-4 border border-zinc-800/60 flex items-center justify-center overflow-hidden">
-              {file.hasThumbnail ? (
+              {file.hasThumbnail && !imgError ? (
                 <img 
                   src={`${import.meta.env.VITE_API_URL}/api/files/${file.id}/thumbnail?token=${token}`} 
                   alt={file.name} 
                   className="w-full h-full object-cover"
+                  onError={() => setErrorFileId(file.id)}
                 />
               ) : (
                 <FileIcon mimeType={file.mimeType} isFolder={file.isFolder} size={48} className={file.isFolder ? 'text-accent/90' : 'text-zinc-600'} />
