@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://site--cloudhub--tqpcqtx9fsl.code.run/api/$1"
+      "destination": "https://site--cloudhub--tqpcqtlx9f5l.code.run/api/$1"
     },
     {
       "source": "/(.*)",
