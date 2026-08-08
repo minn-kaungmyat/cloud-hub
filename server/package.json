@@ -4,10 +4,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "prisma db push && prisma generate && tsc",
+    "build": "prisma generate && tsc",
     "start": "node --dns-result-order=ipv4first dist/index.js",
     "db:push": "prisma db push"
-  },
+  }
   "keywords": [],
   "author": "",
   "license": "ISC",
