@@ -4,7 +4,7 @@ const statusConfig = {
   connected: { label: 'Connected', dotClass: 'bg-green-500' },
   syncing: { label: 'Syncing', dotClass: 'bg-amber-500 animate-pulse' },
   error: { label: 'Error', dotClass: 'bg-red-500' },
-  expired: { label: 'Expired', dotClass: 'bg-zinc-500' },
+  expired: { label: 'Expired', dotClass: 'bg-amber-500/50' },
 } as const;
 
 export const StatusBadge = ({ status }: { status: CloudAccount['status'] }) => {

@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://site--cloudhub--tqpcqtx9fsl.code.run/api/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

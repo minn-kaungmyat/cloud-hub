@@ -2,6 +2,8 @@ import { CommandBar } from '../components/CommandBar';
 import { FileActionBar } from '../components/FileActionBar';
 import { FileList } from '../components/FileList';
 import { UploadDropzone } from '../components/UploadDropzone';
+import { ExpiredState } from '../components/ExpiredState';
+import { useCloudAccounts } from '../hooks/useCloudAccounts';
 import { useFileStore } from '../store/fileStore';
 import { useUIStore } from '../store/uiStore';
 import { useFolderPath } from '../hooks/useFiles';
@@ -17,12 +19,15 @@ const AccountPage = () => {
   const folderId = searchParams.get('folder') || 'root';
 
   const { data: pathData = [] } = useFolderPath(folderId);
+  const { data: accounts = [] } = useCloudAccounts();
 
   if (!activeAccount) {
     return <div className="flex-1 flex items-center justify-center text-zinc-500">No accounts connected</div>;
   }
   
   const accountId = ['recent', 'favorites', 'large-files'].includes(activeAccount) ? undefined : activeAccount;
+  const currentAccount = accountId ? accounts.find(a => a.id === accountId) : null;
+  const isExpired = currentAccount?.syncStatus === 'failed' && currentAccount?.syncError?.toLowerCase().includes('expired');
 
   const segments = [
     { id: 'root', label: accountId ? 'Account Root' : 'All Files' },
@@ -56,7 +61,11 @@ const AccountPage = () => {
       <FileActionBar />
       
       <div className="flex-1 overflow-y-auto relative">
-        <FileList />
+        {isExpired && currentAccount ? (
+          <ExpiredState providerId={currentAccount.provider} />
+        ) : (
+          <FileList />
+        )}
       </div>
 
       {/* Global Overlays */}

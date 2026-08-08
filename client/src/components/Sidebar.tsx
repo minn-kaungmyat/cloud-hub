@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Clock, Star, FileSearch, RefreshCw, Home, Trash2 } from 'lucide-react';
+import { Clock, Star, FileSearch, RefreshCw, Home, Trash2, Unplug } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { SidebarItem } from './SidebarItem';
 import { SidebarSection } from './SidebarSection';
@@ -9,12 +9,14 @@ import { ProviderIcon } from './ProviderIcon';
 import { StatusBadge } from './StatusBadge';
 import { useCloudAccounts, useIncrementalSync } from '../hooks/useCloudAccounts';
 import { useActiveAccount } from '../hooks/useActiveAccount';
+import { useAuthStore } from '../store/authStore';
 
 export const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: accounts = [], isLoading } = useCloudAccounts();
   const { mutate: incrementalSync, isPending: isSyncing, variables: syncingAccountId } = useIncrementalSync();
+  const { token } = useAuthStore();
   
   const activeItem = useActiveAccount();
 
@@ -61,8 +63,20 @@ export const Sidebar = () => {
               active={activeItem === account.id && location.pathname === '/drive'}
               suffix={
                 <div className="flex items-center gap-1.5">
-                  <button
-                    title="Sync files"
+                  {account.syncStatus === 'failed' && account.syncError?.toLowerCase().includes('expired') ? (
+                    <button
+                      title="Connection expired. Click to reconnect."
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.location.assign(`${import.meta.env.VITE_API_URL}/api/cloud-accounts/auth/${account.provider}?token=${token}`);
+                      }}
+                      className="text-amber-500/70 hover:text-amber-400 p-1.5 rounded-sm hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Unplug size={12} />
+                    </button>
+                  ) : (
+                    <button
+                      title="Sync files"
                     onClick={(e) => {
                       e.stopPropagation();
                       incrementalSync(account.id);
@@ -75,7 +89,8 @@ export const Sidebar = () => {
                   >
                     <RefreshCw size={12} className={isSyncing && syncingAccountId === account.id ? "animate-spin text-accent" : ""} />
                   </button>
-                  <StatusBadge status={account.status} />
+                  )}
+                  <StatusBadge status={account.syncStatus === 'failed' && account.syncError?.toLowerCase().includes('expired') ? 'expired' : account.status} />
                 </div>
               }
               onClick={() => navigate(`/drive?account=${account.id}`)}

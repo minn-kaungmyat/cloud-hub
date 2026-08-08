@@ -22,6 +22,8 @@ class CloudAccountService {
                     ...(expiresAt && { expiresAt }),
                     ...(storageUsed !== undefined && { storageUsed }),
                     ...(storageTotal !== undefined && { storageTotal }),
+                    syncStatus: 'idle',
+                    syncError: null,
                 },
             });
         }
