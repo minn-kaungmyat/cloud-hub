@@ -90,7 +90,7 @@ export class CloudAccountController {
           console.error('Initial file sync failed:', err);
         });
 
-        return res.redirect(`${frontendUrl}/settings?success=true`);
+        return res.redirect(`${frontendUrl}/drive?account=${account.id}`);
       } catch (e: any) {
         console.error('Error during provider oauth', e);
         require('fs').writeFileSync('oauth_error.log', e.stack || e.message);
