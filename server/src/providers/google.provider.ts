@@ -355,7 +355,8 @@ export class GoogleDriveProvider implements ICloudProvider {
 
     if (response.status !== 200) {
       console.error('Google Drive Upload Session Error:', response.data);
-      throw new Error(`Failed to create Google Drive upload session: ${response.statusText}`);
+      const details = typeof response.data === 'object' ? JSON.stringify(response.data) : response.data;
+      throw new Error(`Failed to create Google Drive upload session: ${response.status} ${response.statusText}. Details: ${details}`);
     }
 
     // gaxios Headers might be a standard Headers object or a plain object depending on the environment
