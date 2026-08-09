@@ -25,6 +25,7 @@ export interface ICloudProvider {
   permanentlyDeleteFile(accessToken: string, refreshToken: string | null, fileId: string): Promise<any>;
   emptyTrash(accessToken: string, refreshToken: string | null): Promise<any>;
   uploadFile(accessToken: string, refreshToken: string | null, name: string, mimeType: string, filePath: string, parentId: string): Promise<any>;
+  createUploadSession(accessToken: string, refreshToken: string | null, name: string, mimeType: string, parentId: string, size: number): Promise<{ direct: boolean; uploadUrl?: string; method?: string }>;
 
   /**
    * Syncing

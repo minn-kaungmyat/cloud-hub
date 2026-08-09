@@ -417,4 +417,32 @@ export class OneDriveProvider implements ICloudProvider {
       return this.mapGraphFileToGeneric(uploadResultData);
     }
   }
+
+  async createUploadSession(
+    accessToken: string,
+    refreshToken: string | null,
+    name: string,
+    mimeType: string,
+    parentId: string,
+    size: number
+  ) {
+    const sessionRes = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${parentId}:/${encodeURIComponent(name)}:/createUploadSession`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item: {
+          '@microsoft.graph.conflictBehavior': 'rename',
+          name: name
+        }
+      })
+    }, accessToken, refreshToken);
+
+    if (!sessionRes.ok) {
+      const err = await sessionRes.text();
+      throw new Error(`Failed to create OneDrive upload session: ${err}`);
+    }
+
+    const sessionData = await sessionRes.json();
+    return { direct: true, uploadUrl: sessionData.uploadUrl, method: 'PUT' };
+  }
 }

@@ -530,4 +530,19 @@ export class DropboxProvider implements ICloudProvider {
       fs.closeSync(fd);
     }
   }
+
+  async createUploadSession(
+    accessToken: string,
+    refreshToken: string | null,
+    name: string,
+    mimeType: string,
+    parentId: string,
+    size: number
+  ) {
+    // Dropbox requires complex chunked uploads with a cursor for large files, which is difficult 
+    // to proxy securely and efficiently directly to the frontend without exposing tokens.
+    // For now, we fallback to the Node.js server proxy method for Dropbox uploads.
+    // Future enhancement: Implement Dropbox direct uploads.
+    return { direct: false };
+  }
 }

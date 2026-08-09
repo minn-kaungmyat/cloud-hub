@@ -315,4 +315,55 @@ export class GoogleDriveProvider implements ICloudProvider {
 
     return res.data;
   }
+
+  async createUploadSession(
+    accessToken: string,
+    refreshToken: string | null,
+    name: string,
+    mimeType: string,
+    parentId: string,
+    size: number
+  ) {
+    const oAuth2Client = this.getGoogleOAuthClient();
+    oAuth2Client.setCredentials({ 
+      access_token: accessToken,
+      refresh_token: refreshToken || undefined
+    });
+
+    const fileMetadata = {
+      name: name,
+      parents: parentId !== 'root' ? [parentId] : undefined,
+    };
+
+    // Google Drive resumable upload endpoint
+    const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable';
+    
+    // We must manually fetch the auth headers since we're using native fetch instead of the googleapis client
+    const headers = await oAuth2Client.getRequestHeaders();
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'X-Upload-Content-Type': mimeType,
+        'X-Upload-Content-Length': size.toString(),
+      },
+      body: JSON.stringify(fileMetadata),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Google Drive Upload Session Error:', errorText);
+      throw new Error(`Failed to create Google Drive upload session: ${response.statusText}`);
+    }
+
+    const uploadUrl = response.headers.get('Location');
+    
+    if (!uploadUrl) {
+      throw new Error('Google Drive did not return a Location header for the upload session');
+    }
+
+    return { direct: true, uploadUrl, method: 'PUT' };
+  }
 }

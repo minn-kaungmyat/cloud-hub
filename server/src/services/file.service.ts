@@ -1059,6 +1059,83 @@ export class FileService {
       }
     }
   }
+
+  async createUploadSession(accountId: string, userId: string, name: string, mimeType: string, parentProviderId: string, size: number) {
+    const account = await prisma.cloudAccount.findFirst({
+      where: { id: accountId, userId }
+    });
+
+    if (!account) throw new AppError('Cloud account not found', 404);
+    if (!decryptToken(account.accessToken)!) throw new AppError('Account not authenticated', 401);
+
+    const provider = ProviderFactory.getProvider(account.provider);
+    
+    if (!provider.createUploadSession) {
+      return { direct: false };
+    }
+
+    let targetProviderId = 'root';
+    if (parentProviderId !== 'root') {
+      const parentRecord = await prisma.file.findUnique({
+        where: { id: parentProviderId }
+      });
+      if (!parentRecord) throw new AppError('Parent folder not found', 404);
+      targetProviderId = parentRecord.providerFileId;
+    }
+
+    try {
+      const result = await provider.createUploadSession(
+        decryptToken(account.accessToken)!,
+        decryptToken(account.refreshToken),
+        name,
+        mimeType,
+        targetProviderId,
+        size
+      );
+      return result;
+    } catch (error: any) {
+      throw new AppError(error.message || `Failed to create upload session on ${account.provider}`, 500);
+    }
+  }
+
+  async completeUpload(accountId: string, userId: string, fileData: any) {
+    const account = await prisma.cloudAccount.findFirst({
+      where: { id: accountId, userId }
+    });
+
+    if (!account) throw new AppError('Cloud account not found', 404);
+
+    let parentLocalId = null;
+    if (fileData.parentId && fileData.parentId !== 'root') {
+      const parentRecord = await prisma.file.findFirst({
+        where: { providerFileId: fileData.parentId, cloudAccountId: account.id }
+      });
+      if (parentRecord) {
+        parentLocalId = parentRecord.id;
+      }
+    }
+
+    const newFile = await prisma.file.create({
+      data: {
+        providerFileId: fileData.providerFileId || fileData.id,
+        provider: account.provider,
+        name: fileData.name,
+        mimeType: fileData.mimeType,
+        size: BigInt(fileData.size || 0),
+        parentId: parentLocalId,
+        modifiedTime: fileData.modifiedTime ? new Date(fileData.modifiedTime) : new Date(),
+        hasThumbnail: !!fileData.thumbnailLink,
+        isFolder: fileData.mimeType === 'application/vnd.google-apps.folder',
+        isShared: false,
+        cloudAccountId: account.id
+      }
+    });
+
+    return {
+      ...newFile,
+      size: Number(newFile.size)
+    };
+  }
 }
 
 export const fileService = new FileService();

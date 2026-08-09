@@ -369,6 +369,49 @@ export class FileController {
       userId
     );
 
+      res.status(201).json({
+      status: 'success',
+      data: { file: result }
+    });
+  });
+
+  createUploadSession = asyncHandler(async (req: Request, res: Response) => {
+    const accountId = req.params.accountId as string;
+    const { name, mimeType, parentId, size } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) throw new AppError('Unauthorized', 401);
+    if (!name || !mimeType || size === undefined) throw new AppError('Missing file metadata', 400);
+
+    const result = await fileService.createUploadSession(
+      accountId,
+      userId,
+      name,
+      mimeType,
+      parentId || 'root',
+      size
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: result
+    });
+  });
+
+  completeUpload = asyncHandler(async (req: Request, res: Response) => {
+    const accountId = req.params.accountId as string;
+    const { providerFileId, name, mimeType, size, parentId, modifiedTime, thumbnailLink } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) throw new AppError('Unauthorized', 401);
+    if (!providerFileId) throw new AppError('Missing provider file ID', 400);
+
+    const result = await fileService.completeUpload(
+      accountId,
+      userId,
+      { providerFileId, name, mimeType, size, parentId, modifiedTime, thumbnailLink }
+    );
+
     res.status(201).json({
       status: 'success',
       data: { file: result }

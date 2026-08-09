@@ -167,33 +167,95 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
             )
           }));
           
-          const formData = new FormData();
-          formData.append('file', item.file);
-          formData.append('parentId', item.folderId);
-          
-          const baseUrl = import.meta.env.VITE_DIRECT_BACKEND_URL || '';
-          const uploadPath = `/api/files/upload/${item.accountId}`;
-          const fullUrl = baseUrl ? `${baseUrl.replace(/\/$/, '')}${uploadPath}` : uploadPath;
-          
-          await api.post(fullUrl, formData, {
-            signal: abortController.signal,
-            headers: { 'Content-Type': 'multipart/form-data' },
-            onUploadProgress: (progressEvent) => {
-              if (progressEvent.total) {
-                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                
-                set(state => ({
-                  uploads: state.uploads.map(u => 
-                    u.id === item.id ? { 
-                      ...u, 
-                      progress: percentCompleted,
-                      status: percentCompleted === 100 ? 'processing' : 'uploading'
-                    } : u
-                  )
-                }));
+          try {
+            // 1. Request Upload Session
+            const sessionRes = await api.post(`/api/files/upload-session/${item.accountId}`, {
+              name: item.file.name,
+              mimeType: item.file.type || 'application/octet-stream',
+              size: item.file.size,
+              parentId: item.folderId
+            }, { signal: abortController.signal });
+
+            const sessionData = sessionRes.data.data;
+
+            if (sessionData.direct && sessionData.uploadUrl) {
+              // 2A. Direct Upload to Cloud Provider
+              
+              // Depending on the provider, they might require specific headers. Google Drive requires none, just the file payload.
+              // OneDrive also accepts raw bytes.
+              const directHeaders: any = {
+                'Content-Type': item.file.type || 'application/octet-stream',
+              };
+              
+              // OneDrive specific required headers for large files chunking if we used chunks, but we upload in one request.
+              if (sessionData.uploadUrl.includes('graph.microsoft.com')) {
+                 directHeaders['Content-Length'] = item.file.size.toString();
+                 directHeaders['Content-Range'] = `bytes 0-${item.file.size - 1}/${item.file.size}`;
               }
+
+              const directRes = await axios.request({
+                method: sessionData.method || 'PUT',
+                url: sessionData.uploadUrl,
+                data: item.file,
+                signal: abortController.signal,
+                headers: directHeaders,
+                onUploadProgress: (progressEvent) => {
+                  if (progressEvent.total) {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    set(state => ({
+                      uploads: state.uploads.map(u => 
+                        u.id === item.id ? { 
+                          ...u, 
+                          progress: percentCompleted,
+                          status: percentCompleted === 100 ? 'processing' : 'uploading'
+                        } : u
+                      )
+                    }));
+                  }
+                }
+              });
+
+              // 3. Notify backend to sync DB
+              await api.post(`/api/files/upload-complete/${item.accountId}`, {
+                providerFileId: directRes.data?.id,
+                name: directRes.data?.name || item.file.name,
+                mimeType: directRes.data?.mimeType || item.file.type,
+                size: directRes.data?.size || item.file.size,
+                parentId: item.folderId,
+                modifiedTime: directRes.data?.modifiedTime || directRes.data?.lastModifiedDateTime || new Date().toISOString(),
+                thumbnailLink: directRes.data?.thumbnailLink
+              });
+
+            } else {
+              // 2B. Fallback to Proxy Upload (e.g., Dropbox)
+              const formData = new FormData();
+              formData.append('file', item.file);
+              formData.append('parentId', item.folderId);
+              
+              const baseUrl = import.meta.env.VITE_DIRECT_BACKEND_URL || '';
+              const uploadPath = `/api/files/upload/${item.accountId}`;
+              const fullUrl = baseUrl ? `${baseUrl.replace(/\/$/, '')}${uploadPath}` : uploadPath;
+              
+              await api.post(fullUrl, formData, {
+                signal: abortController.signal,
+                headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent) => {
+                  if (progressEvent.total) {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    
+                    set(state => ({
+                      uploads: state.uploads.map(u => 
+                        u.id === item.id ? { 
+                          ...u, 
+                          progress: percentCompleted,
+                          status: percentCompleted === 100 ? 'processing' : 'uploading'
+                        } : u
+                      )
+                    }));
+                  }
+                }
+              });
             }
-          });
           
           // On Success
           set(state => ({
