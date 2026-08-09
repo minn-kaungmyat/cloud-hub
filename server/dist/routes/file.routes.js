@@ -9,6 +9,8 @@ const router = (0, express_1.Router)();
 router.use(requireAuth_1.requireAuth);
 router.post('/sync/:accountId', file_controller_1.fileController.syncFiles);
 router.post('/sync/incremental/:accountId', file_controller_1.fileController.incrementalSync);
+router.post('/upload-session/:accountId', file_controller_1.fileController.createUploadSession);
+router.post('/upload-complete/:accountId', file_controller_1.fileController.completeUpload);
 router.post('/upload/:accountId', upload_1.upload.single('file'), file_controller_1.fileController.uploadFile);
 router.get('/search', file_controller_1.fileController.searchFiles);
 router.get('/folder/:folderId/path', file_controller_1.fileController.getFolderPath);

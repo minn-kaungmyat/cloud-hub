@@ -262,5 +262,42 @@ class GoogleDriveProvider {
         });
         return res.data;
     }
+    async createUploadSession(accessToken, refreshToken, name, mimeType, parentId, size) {
+        const oAuth2Client = this.getGoogleOAuthClient();
+        oAuth2Client.setCredentials({
+            access_token: accessToken,
+            refresh_token: refreshToken || undefined
+        });
+        const fileMetadata = {
+            name: name,
+            parents: parentId !== 'root' ? [parentId] : undefined,
+        };
+        // Google Drive resumable upload endpoint
+        const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable';
+        // oAuth2Client.request automatically refreshes tokens and injects the Authorization header
+        const response = await oAuth2Client.request({
+            url,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Upload-Content-Type': mimeType,
+                'X-Upload-Content-Length': size.toString(),
+                // Pass the frontend origin so Google sets proper CORS headers for the browser's subsequent PUT request
+                'Origin': process.env.VITE_APP_URL || process.env.API_URL || 'https://cloudhub-app.vercel.app'
+            },
+            data: fileMetadata,
+            validateStatus: () => true // Prevent it from throwing instantly so we can log the error body
+        });
+        if (response.status !== 200) {
+            console.error('Google Drive Upload Session Error:', response.data);
+            throw new Error(`Failed to create Google Drive upload session: ${response.statusText}`);
+        }
+        // gaxios Headers might be a standard Headers object or a plain object depending on the environment
+        const uploadUrl = response.headers.get ? response.headers.get('Location') : response.headers.location;
+        if (!uploadUrl) {
+            throw new Error('Google Drive did not return a Location header for the upload session');
+        }
+        return { direct: true, uploadUrl, method: 'PUT' };
+    }
 }
 exports.GoogleDriveProvider = GoogleDriveProvider;

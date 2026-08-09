@@ -927,6 +927,70 @@ class FileService {
             }
         }
     }
+    async createUploadSession(accountId, userId, name, mimeType, parentProviderId, size) {
+        const account = await prisma_1.prisma.cloudAccount.findFirst({
+            where: { id: accountId, userId }
+        });
+        if (!account)
+            throw new AppError_1.AppError('Cloud account not found', 404);
+        if (!(0, crypto_1.decryptToken)(account.accessToken))
+            throw new AppError_1.AppError('Account not authenticated', 401);
+        const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
+        if (!provider.createUploadSession) {
+            return { direct: false };
+        }
+        let targetProviderId = 'root';
+        if (parentProviderId !== 'root') {
+            const parentRecord = await prisma_1.prisma.file.findUnique({
+                where: { id: parentProviderId }
+            });
+            if (!parentRecord)
+                throw new AppError_1.AppError('Parent folder not found', 404);
+            targetProviderId = parentRecord.providerFileId;
+        }
+        try {
+            const result = await provider.createUploadSession((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), name, mimeType, targetProviderId, size);
+            return result;
+        }
+        catch (error) {
+            throw new AppError_1.AppError(error.message || `Failed to create upload session on ${account.provider}`, 500);
+        }
+    }
+    async completeUpload(accountId, userId, fileData) {
+        const account = await prisma_1.prisma.cloudAccount.findFirst({
+            where: { id: accountId, userId }
+        });
+        if (!account)
+            throw new AppError_1.AppError('Cloud account not found', 404);
+        let parentLocalId = null;
+        if (fileData.parentId && fileData.parentId !== 'root') {
+            const parentRecord = await prisma_1.prisma.file.findFirst({
+                where: { providerFileId: fileData.parentId, cloudAccountId: account.id }
+            });
+            if (parentRecord) {
+                parentLocalId = parentRecord.id;
+            }
+        }
+        const newFile = await prisma_1.prisma.file.create({
+            data: {
+                providerFileId: fileData.providerFileId || fileData.id,
+                provider: account.provider,
+                name: fileData.name,
+                mimeType: fileData.mimeType,
+                size: BigInt(fileData.size || 0),
+                parentId: parentLocalId,
+                modifiedTime: fileData.modifiedTime ? new Date(fileData.modifiedTime) : new Date(),
+                hasThumbnail: !!fileData.thumbnailLink,
+                isFolder: fileData.mimeType === 'application/vnd.google-apps.folder',
+                isShared: false,
+                cloudAccountId: account.id
+            }
+        });
+        return {
+            ...newFile,
+            size: Number(newFile.size)
+        };
+    }
 }
 exports.FileService = FileService;
 exports.fileService = new FileService();

@@ -296,6 +296,34 @@ class FileController {
             data: { file: result }
         });
     });
+    createUploadSession = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+        const accountId = req.params.accountId;
+        const { name, mimeType, parentId, size } = req.body;
+        const userId = req.user?.id;
+        if (!userId)
+            throw new AppError_1.AppError('Unauthorized', 401);
+        if (!name || !mimeType || size === undefined)
+            throw new AppError_1.AppError('Missing file metadata', 400);
+        const result = await file_service_1.fileService.createUploadSession(accountId, userId, name, mimeType, parentId || 'root', size);
+        res.status(200).json({
+            status: 'success',
+            data: result
+        });
+    });
+    completeUpload = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+        const accountId = req.params.accountId;
+        const { providerFileId, name, mimeType, size, parentId, modifiedTime, thumbnailLink } = req.body;
+        const userId = req.user?.id;
+        if (!userId)
+            throw new AppError_1.AppError('Unauthorized', 401);
+        if (!providerFileId)
+            throw new AppError_1.AppError('Missing provider file ID', 400);
+        const result = await file_service_1.fileService.completeUpload(accountId, userId, { providerFileId, name, mimeType, size, parentId, modifiedTime, thumbnailLink });
+        res.status(201).json({
+            status: 'success',
+            data: { file: result }
+        });
+    });
 }
 exports.FileController = FileController;
 exports.fileController = new FileController();

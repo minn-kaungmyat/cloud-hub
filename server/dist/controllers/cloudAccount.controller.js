@@ -71,7 +71,7 @@ class CloudAccountController {
                 file_service_1.fileService.syncFiles(account.id, userId).catch(err => {
                     console.error('Initial file sync failed:', err);
                 });
-                return res.redirect(`${frontendUrl}/settings?success=true`);
+                return res.redirect(`${frontendUrl}/drive?account=${account.id}`);
             }
             catch (e) {
                 console.error('Error during provider oauth', e);
