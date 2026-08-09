@@ -154,7 +154,7 @@ export const SearchOverlay = () => {
       const mime = f.mimeType.toLowerCase();
       if (typeFilter === 'document' && !mime.includes('pdf') && !mime.includes('document') && !mime.includes('text') && !mime.includes('markdown')) return false;
       if (typeFilter === 'image' && !mime.startsWith('image/')) return false;
-      if (typeFilter === 'video' && !mime.startsWith('video/')) return false;
+      if (typeFilter === 'video' && !mime.startsWith('video/') && !(/\.ts$/i.test(f.name) && f.size > 5 * 1024 * 1024)) return false;
       if (typeFilter === 'spreadsheet' && !mime.includes('spreadsheet') && !mime.includes('excel')) return false;
       if (typeFilter === 'code' && !mime.includes('json') && !mime.includes('javascript') && !mime.includes('xml') && !mime.includes('html')) return false;
     }

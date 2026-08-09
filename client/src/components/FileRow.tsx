@@ -10,10 +10,10 @@ import { MoreVertical } from 'lucide-react';
 import { ProviderIcon, getProviderLabel } from './ProviderIcon';
 import { useLocation } from 'react-router-dom';
 
-function getFileIcon(mimeType: string, isFolder: boolean): LucideIcon {
+function getFileIcon(mimeType: string, isFolder: boolean, name?: string, size?: number): LucideIcon {
   if (isFolder) return Folder;
   if (mimeType.startsWith('image/')) return Image;
-  if (mimeType.startsWith('video/')) return Film;
+  if (mimeType.startsWith('video/') || (name && /\.ts$/i.test(name) && size && size > 5 * 1024 * 1024)) return Film;
   if (mimeType.startsWith('audio/')) return Music;
   if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return FileSpreadsheet;
   if (mimeType.includes('json') || mimeType.includes('javascript') || mimeType.includes('typescript') || mimeType.includes('xml') || mimeType.includes('html') || mimeType.includes('css')) return FileCode;
@@ -30,8 +30,8 @@ export interface FileRowProps {
   onDoubleClick?: (file: CloudFile) => void;
 }
 
-export const FileIcon = ({ mimeType, isFolder, size, className }: { mimeType: string; isFolder: boolean; size: number; className: string }) => {
-  const icon = getFileIcon(mimeType, isFolder);
+export const FileIcon = ({ mimeType, isFolder, size, className, name, fileSize }: { mimeType: string; isFolder: boolean; size: number; className: string, name?: string, fileSize?: number }) => {
+  const icon = getFileIcon(mimeType, isFolder, name, fileSize);
   return createElement(icon, { size, className });
 };
 
@@ -117,7 +117,7 @@ export const FileRow = ({ file, selected, onClick, onDoubleClick }: FileRowProps
             }}
           />
         ) : (
-          <FileIcon mimeType={file.mimeType} isFolder={file.isFolder} size={16} className={selected ? 'text-accent shrink-0' : 'text-zinc-500 shrink-0 group-hover:text-zinc-400 transition-colors'} />
+          <FileIcon mimeType={file.mimeType} isFolder={file.isFolder} name={file.name} fileSize={file.size} size={16} className={selected ? 'text-accent shrink-0' : 'text-zinc-500 shrink-0 group-hover:text-zinc-400 transition-colors'} />
         )}
         <span className="truncate">{file.name}</span>
       </div>

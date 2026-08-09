@@ -103,7 +103,7 @@ export const FileCard = ({ file, selected, onClick, onDoubleClick }: FileCardPro
             onError={() => setErrorFileId(file.id)}
           />
         ) : (
-          <FileIcon mimeType={file.mimeType} isFolder={file.isFolder} size={64} className={file.isFolder ? 'text-zinc-400 group-hover:text-zinc-300 transition-colors' : 'text-zinc-600'} />
+          <FileIcon mimeType={file.mimeType} isFolder={file.isFolder} name={file.name} fileSize={file.size} size={64} className={file.isFolder ? 'text-zinc-400 group-hover:text-zinc-300 transition-colors' : 'text-zinc-600'} />
         )}
         {location.pathname === '/trash' && (
           <div className="absolute bottom-1 right-1 bg-zinc-950/80 p-1 rounded-md backdrop-blur-sm z-10">
