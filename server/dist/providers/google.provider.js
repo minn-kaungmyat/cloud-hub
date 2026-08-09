@@ -48,7 +48,7 @@ class GoogleDriveProvider {
         const { data } = await oauth2.userinfo.get();
         return data; // { email, id, ... }
     }
-    async listFiles(accessToken, refreshToken) {
+    async *listFiles(accessToken, refreshToken) {
         const oAuth2Client = this.getGoogleOAuthClient();
         oAuth2Client.setCredentials({
             access_token: accessToken,
@@ -59,7 +59,6 @@ class GoogleDriveProvider {
         const rootRes = await drive.files.get({ fileId: 'root', fields: 'id' });
         const rootFolderId = rootRes.data.id;
         console.log('Google Drive root folder ID:', rootFolderId);
-        const allFiles = [];
         let pageToken = undefined;
         do {
             const res = await drive.files.list({
@@ -68,13 +67,12 @@ class GoogleDriveProvider {
                 fields: 'nextPageToken, files(id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe)',
                 pageToken: pageToken,
             });
-            if (res.data.files) {
-                allFiles.push(...res.data.files);
-                console.log(`Fetched ${res.data.files.length} files... (Total: ${allFiles.length})`);
+            if (res.data.files && res.data.files.length > 0) {
+                console.log(`Yielding ${res.data.files.length} Google Drive files...`);
+                yield { files: res.data.files, rootFolderId };
             }
             pageToken = res.data.nextPageToken || undefined;
         } while (pageToken);
-        return { files: allFiles, rootFolderId: rootFolderId };
     }
     async getThumbnailLink(accessToken, refreshToken, fileId) {
         const drive = this.getDriveClient(accessToken, refreshToken);
@@ -195,30 +193,29 @@ class GoogleDriveProvider {
         const res = await drive.changes.getStartPageToken({});
         return res.data.startPageToken;
     }
-    async listChanges(accessToken, refreshToken, pageToken) {
+    async *listChanges(accessToken, refreshToken, pageToken) {
         const oAuth2Client = this.getGoogleOAuthClient();
         oAuth2Client.setCredentials({
             access_token: accessToken,
             refresh_token: refreshToken || undefined
         });
         const drive = googleapis_1.google.drive({ version: 'v3', auth: oAuth2Client });
-        const allChanges = [];
         let currentToken = pageToken;
-        let newStartPageToken = undefined;
         do {
             const res = await drive.changes.list({
                 pageToken: currentToken,
                 fields: 'newStartPageToken, nextPageToken, changes(fileId, removed, file(id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe))',
             });
-            if (res.data.changes) {
-                allChanges.push(...res.data.changes);
+            const newStartPageToken = res.data.newStartPageToken || undefined;
+            if (res.data.changes && res.data.changes.length > 0) {
+                yield { changes: res.data.changes, newStartPageToken };
             }
-            if (res.data.newStartPageToken) {
-                newStartPageToken = res.data.newStartPageToken;
+            else if (newStartPageToken) {
+                // Even if no changes, we might need to yield the newStartPageToken
+                yield { changes: [], newStartPageToken };
             }
             currentToken = res.data.nextPageToken || undefined;
         } while (currentToken);
-        return { changes: allChanges, newStartPageToken };
     }
     async uploadFile(accessToken, refreshToken, name, mimeType, filePath, parentId) {
         const oAuth2Client = this.getGoogleOAuthClient();

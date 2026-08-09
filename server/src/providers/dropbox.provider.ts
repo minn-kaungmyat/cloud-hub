@@ -132,9 +132,8 @@ export class DropboxProvider implements ICloudProvider {
     };
   }
 
-  async listFiles(accessToken: string, refreshToken: string | null) {
+  async *listFiles(accessToken: string, refreshToken: string | null): AsyncGenerator<{ files: any[]; rootFolderId: string }, void, unknown> {
     const rootFolderId = '';
-    const allFilesMap = new Map<string, any>();
     
     let hasMore = true;
     let cursor = '';
@@ -160,21 +159,21 @@ export class DropboxProvider implements ICloudProvider {
       }
       
       const data = await res.json();
-      if (data.entries) {
+      if (data.entries && data.entries.length > 0) {
+        const pageFiles = [];
         for (const item of data.entries) {
           // Store all files, including deleted ones (which have .tag === 'deleted')
           const mapped = this.mapDropboxFileToGeneric(item);
           if (mapped.id) {
-            allFilesMap.set(mapped.id, mapped);
+            pageFiles.push(mapped);
           }
         }
+        yield { files: pageFiles, rootFolderId };
       }
       
       hasMore = data.has_more;
       cursor = data.cursor;
     }
-
-    return { files: Array.from(allFilesMap.values()), rootFolderId };
   }
 
   async getThumbnailLink(accessToken: string, refreshToken: string | null, fileId: string) {
@@ -367,11 +366,10 @@ export class DropboxProvider implements ICloudProvider {
     return data.cursor;
   }
 
-  async listChanges(accessToken: string, refreshToken: string | null, pageToken: string) {
-    if (!pageToken) return { changes: [] };
+  async *listChanges(accessToken: string, refreshToken: string | null, pageToken: string): AsyncGenerator<{ changes: any[]; newStartPageToken?: string }, void, unknown> {
+    if (!pageToken) return;
 
     let cursor = pageToken;
-    const allChanges: any[] = [];
     let hasMore = true;
 
     while (hasMore) {
@@ -384,7 +382,11 @@ export class DropboxProvider implements ICloudProvider {
       if (!res.ok) throw new Error('Failed to fetch Dropbox changes');
       
       const data = await res.json();
-      if (data.entries) {
+      hasMore = data.has_more;
+      cursor = data.cursor;
+
+      if (data.entries && data.entries.length > 0) {
+        const pageChanges = [];
         for (const item of data.entries) {
           const isDeleted = item['.tag'] === 'deleted';
           const resolvedId = item.id || item.path_lower;
@@ -398,19 +400,17 @@ export class DropboxProvider implements ICloudProvider {
             mappedFile.trashed = true;
           }
           
-          allChanges.push({
+          pageChanges.push({
             fileId: resolvedId,
             removed: false, // Don't remove from DB, just mark as trashed
             file: mappedFile
           });
         }
+        yield { changes: pageChanges, newStartPageToken: hasMore ? undefined : cursor };
+      } else if (!hasMore) {
+        yield { changes: [], newStartPageToken: cursor };
       }
-      
-      hasMore = data.has_more;
-      cursor = data.cursor;
     }
-
-    return { changes: allChanges, newStartPageToken: cursor };
   }
 
   async uploadFile(

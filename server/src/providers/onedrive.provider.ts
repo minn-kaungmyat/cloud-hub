@@ -138,7 +138,7 @@ export class OneDriveProvider implements ICloudProvider {
     };
   }
 
-  async listFiles(accessToken: string, refreshToken: string | null) {
+  async *listFiles(accessToken: string, refreshToken: string | null): AsyncGenerator<{ files: any[]; rootFolderId: string }, void, unknown> {
     // Get root folder ID
     const rootRes = await this.fetchGraph('https://graph.microsoft.com/v1.0/me/drive/root', {}, accessToken, refreshToken);
     if (!rootRes.ok) throw new Error('Failed to fetch OneDrive root');
@@ -146,7 +146,6 @@ export class OneDriveProvider implements ICloudProvider {
     const rootFolderId = rootData.id;
 
     let url = 'https://graph.microsoft.com/v1.0/me/drive/root/delta?select=id,name,file,folder,size,parentReference,lastModifiedDateTime,deleted';
-    const allFilesMap = new Map<string, any>();
 
     while (url) {
       const res = await this.fetchGraph(url, {}, accessToken, refreshToken);
@@ -156,19 +155,19 @@ export class OneDriveProvider implements ICloudProvider {
       }
       
       const data = await res.json();
-      if (data.value) {
+      if (data.value && data.value.length > 0) {
+        const pageFiles = [];
         for (const item of data.value) {
           const mapped = this.mapGraphFileToGeneric(item);
           if (item.deleted) {
             mapped.trashed = true;
           }
-          allFilesMap.set(item.id, mapped);
+          pageFiles.push(mapped);
         }
+        yield { files: pageFiles, rootFolderId };
       }
       url = data['@odata.nextLink'] || '';
     }
-
-    return { files: Array.from(allFilesMap.values()), rootFolderId };
   }
 
   async getThumbnailLink(accessToken: string, refreshToken: string | null, fileId: string) {
@@ -282,11 +281,10 @@ export class OneDriveProvider implements ICloudProvider {
     return data['@odata.deltaLink'] || '';
   }
 
-  async listChanges(accessToken: string, refreshToken: string | null, pageToken: string) {
-    if (!pageToken) return { changes: [] };
+  async *listChanges(accessToken: string, refreshToken: string | null, pageToken: string): AsyncGenerator<{ changes: any[]; newStartPageToken?: string }, void, unknown> {
+    if (!pageToken) return;
 
     let url = pageToken;
-    const allChanges: any[] = [];
     let newStartPageToken: string | undefined = undefined;
 
     while (url) {
@@ -294,12 +292,18 @@ export class OneDriveProvider implements ICloudProvider {
       if (!res.ok) throw new Error('Failed to fetch OneDrive changes');
       
       const data = await res.json();
-      if (data.value) {
+      
+      if (data['@odata.deltaLink']) {
+        newStartPageToken = data['@odata.deltaLink'];
+      }
+      
+      if (data.value && data.value.length > 0) {
+        const pageChanges = [];
         for (const item of data.value) {
           const isHardDeleted = item.deleted ? item.deleted.state === 'hardDeleted' : false;
           
           if (item.deleted && !isHardDeleted) {
-            allChanges.push({
+            pageChanges.push({
               fileId: item.id,
               removed: false,
               file: { id: item.id, trashed: true }
@@ -309,23 +313,23 @@ export class OneDriveProvider implements ICloudProvider {
 
           const mappedFile = this.mapGraphFileToGeneric(item);
           
-          allChanges.push({
+          pageChanges.push({
             fileId: item.id,
             removed: isHardDeleted,
             file: isHardDeleted ? null : mappedFile
           });
         }
+        yield { changes: pageChanges, newStartPageToken: data['@odata.nextLink'] ? undefined : newStartPageToken };
+      } else if (!data['@odata.nextLink'] && newStartPageToken) {
+        yield { changes: [], newStartPageToken };
       }
       
       if (data['@odata.nextLink']) {
         url = data['@odata.nextLink'];
       } else {
-        newStartPageToken = data['@odata.deltaLink'];
         break;
       }
     }
-
-    return { changes: allChanges, newStartPageToken };
   }
 
   async uploadFile(

@@ -30,8 +30,6 @@ class FileService {
                 where: { id: account.id },
                 data: { syncStatus: 'syncing', syncError: null }
             });
-            // Fetch from Provider
-            const { files: driveFiles, rootFolderId } = await provider.listFiles((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken));
             try {
                 const quota = await provider.getDriveQuota((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken));
                 if (quota) {
@@ -47,41 +45,38 @@ class FileService {
             catch (e) {
                 console.error('Failed to update drive quota during sync', e);
             }
-            // Build a mapping of providerFileId -> localUUID
+            // Clear out the old files
+            await prisma_1.prisma.file.deleteMany({
+                where: { cloudAccountId },
+            });
+            let totalFiles = 0;
+            let rootFolderId = '';
             const localIdMap = new Map();
-            for (const f of driveFiles) {
-                localIdMap.set(f.id, (0, uuid_1.v4)());
-            }
-            // We'll perform a transaction: delete old files, insert new files.
-            await prisma_1.prisma.$transaction(async (tx) => {
-                // Delete existing files for this account
-                await tx.file.deleteMany({
-                    where: { cloudAccountId },
-                });
-                // Insert new files
-                const data = driveFiles.map((f) => {
-                    // Determine the parentId:
-                    let parentId = null;
+            const getLocalId = (providerId) => {
+                if (!localIdMap.has(providerId))
+                    localIdMap.set(providerId, (0, uuid_1.v4)());
+                return localIdMap.get(providerId);
+            };
+            const relationships = [];
+            for await (const page of provider.listFiles((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken))) {
+                if (page.rootFolderId)
+                    rootFolderId = page.rootFolderId;
+                const data = page.files.map((f) => {
+                    const childId = getLocalId(f.id);
                     if (f.parents && f.parents.length > 0) {
                         const rawParent = f.parents[0];
-                        if (rawParent === rootFolderId) {
-                            parentId = null; // Root-level file
-                        }
-                        else if (localIdMap.has(rawParent)) {
-                            parentId = localIdMap.get(rawParent); // Use perfectly mapped local UUID
-                        }
-                        else {
-                            parentId = null; // Orphan (parent not in our dataset)
+                        if (rawParent !== rootFolderId) {
+                            relationships.push({ childId, parentProviderId: rawParent });
                         }
                     }
                     return {
-                        id: localIdMap.get(f.id),
+                        id: childId,
                         providerFileId: f.id,
                         provider: account.provider,
-                        name: f.name,
-                        mimeType: f.mimeType,
+                        name: f.name || 'Unknown',
+                        mimeType: f.mimeType || 'application/octet-stream',
                         size: f.size ? BigInt(f.size) : BigInt(0),
-                        parentId,
+                        parentId: null, // We'll link parents in pass 2
                         modifiedTime: f.modifiedTime ? new Date(f.modifiedTime) : new Date(),
                         hasThumbnail: !!f.thumbnailLink,
                         isFolder: f.mimeType === 'application/vnd.google-apps.folder',
@@ -90,38 +85,29 @@ class FileService {
                         cloudAccountId: account.id,
                     };
                 });
-                // Topologically sort to ensure parents are inserted before children
-                const dataMap = new Map(data.map(f => [f.id, f]));
-                const depths = new Map();
-                const getDepth = (id, visited = new Set()) => {
-                    if (!id)
-                        return 0;
-                    if (depths.has(id))
-                        return depths.get(id);
-                    if (visited.has(id))
-                        return 0; // Break cycles
-                    visited.add(id);
-                    const file = dataMap.get(id);
-                    if (!file || !file.parentId) {
-                        depths.set(id, 0);
-                        return 0;
-                    }
-                    const depth = 1 + getDepth(file.parentId, visited);
-                    depths.set(id, depth);
-                    return depth;
-                };
-                data.forEach(f => getDepth(f.id));
-                data.sort((a, b) => depths.get(a.id) - depths.get(b.id));
                 if (data.length > 0) {
-                    const CHUNK_SIZE = 1000;
-                    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-                        const chunk = data.slice(i, i + CHUNK_SIZE);
-                        await tx.file.createMany({
-                            data: chunk,
-                        });
-                    }
+                    await prisma_1.prisma.file.createMany({ data });
+                    totalFiles += data.length;
                 }
-            }, { timeout: 120000 });
+            }
+            // Pass 2: Resolve parent relationships
+            if (relationships.length > 0) {
+                const CHUNK_SIZE = 1000;
+                for (let i = 0; i < relationships.length; i += CHUNK_SIZE) {
+                    const chunk = relationships.slice(i, i + CHUNK_SIZE);
+                    await prisma_1.prisma.$transaction(chunk.map(rel => {
+                        const parentId = localIdMap.get(rel.parentProviderId);
+                        if (parentId) {
+                            return prisma_1.prisma.file.update({
+                                where: { id: rel.childId },
+                                data: { parentId }
+                            });
+                        }
+                        // Skip orphans or parents not in map by returning a dummy promise
+                        return prisma_1.prisma.file.findUnique({ where: { id: '00000000-0000-0000-0000-000000000000' } });
+                    }));
+                }
+            }
             // Mark as completed and save start page token
             const syncToken = await provider.getStartPageToken((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken));
             await prisma_1.prisma.cloudAccount.update({
@@ -129,11 +115,11 @@ class FileService {
                 data: {
                     syncStatus: 'completed',
                     lastSyncedAt: new Date(),
-                    fileCount: driveFiles.length,
+                    fileCount: totalFiles,
                     syncToken
                 }
             });
-            return { count: driveFiles.length };
+            return { count: totalFiles };
         }
         catch (error) {
             console.error('Sync failed:', error);
@@ -162,13 +148,20 @@ class FileService {
             return this.syncFiles(cloudAccountId, userId);
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
-            const { changes, newStartPageToken } = await provider.listChanges((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), account.syncToken);
-            if (changes.length > 0) {
-                const existingFiles = await prisma_1.prisma.file.findMany({
-                    where: { cloudAccountId: account.id },
-                    select: { id: true, providerFileId: true }
-                });
-                const validIds = new Map(existingFiles.map(f => [f.providerFileId, f.id]));
+            let finalSyncToken = account.syncToken;
+            let hasChanges = false;
+            const existingFiles = await prisma_1.prisma.file.findMany({
+                where: { cloudAccountId: account.id },
+                select: { id: true, providerFileId: true }
+            });
+            const validIds = new Map(existingFiles.map(f => [f.providerFileId, f.id]));
+            for await (const page of provider.listChanges((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), account.syncToken)) {
+                const { changes, newStartPageToken } = page;
+                if (newStartPageToken)
+                    finalSyncToken = newStartPageToken;
+                if (changes.length === 0)
+                    continue;
+                hasChanges = true;
                 await prisma_1.prisma.$transaction(async (tx) => {
                     for (const change of changes) {
                         const providerFileId = change.fileId;
@@ -230,21 +223,17 @@ class FileService {
                             }
                         }
                     }
-                    const count = await tx.file.count({ where: { cloudAccountId: account.id } });
-                    await tx.cloudAccount.update({
-                        where: { id: account.id },
-                        data: {
-                            fileCount: count,
-                            syncToken: newStartPageToken || account.syncToken,
-                            lastSyncedAt: new Date()
-                        }
-                    });
                 }, { timeout: 30000 });
             }
-            else if (newStartPageToken && newStartPageToken !== account.syncToken) {
+            if (hasChanges || (finalSyncToken && finalSyncToken !== account.syncToken)) {
+                const count = await prisma_1.prisma.file.count({ where: { cloudAccountId: account.id } });
                 await prisma_1.prisma.cloudAccount.update({
                     where: { id: account.id },
-                    data: { syncToken: newStartPageToken, lastSyncedAt: new Date() }
+                    data: {
+                        fileCount: count,
+                        syncToken: finalSyncToken,
+                        lastSyncedAt: new Date()
+                    }
                 });
             }
             // Always fetch the latest storage quota to correct any drift from external changes
@@ -260,7 +249,7 @@ class FileService {
             catch (e) {
                 console.error('Failed to fetch quota during incremental sync:', e);
             }
-            return { count: changes.length };
+            return { success: true };
         }
         catch (error) {
             console.error('Incremental sync failed:', error);

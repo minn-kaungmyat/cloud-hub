@@ -152,9 +152,8 @@ class DropboxProvider {
             ownedByMe: true
         };
     }
-    async listFiles(accessToken, refreshToken) {
+    async *listFiles(accessToken, refreshToken) {
         const rootFolderId = '';
-        const allFilesMap = new Map();
         let hasMore = true;
         let cursor = '';
         while (hasMore) {
@@ -174,19 +173,20 @@ class DropboxProvider {
                 throw new Error(`Failed to list files: ${err}`);
             }
             const data = await res.json();
-            if (data.entries) {
+            if (data.entries && data.entries.length > 0) {
+                const pageFiles = [];
                 for (const item of data.entries) {
                     // Store all files, including deleted ones (which have .tag === 'deleted')
                     const mapped = this.mapDropboxFileToGeneric(item);
                     if (mapped.id) {
-                        allFilesMap.set(mapped.id, mapped);
+                        pageFiles.push(mapped);
                     }
                 }
+                yield { files: pageFiles, rootFolderId };
             }
             hasMore = data.has_more;
             cursor = data.cursor;
         }
-        return { files: Array.from(allFilesMap.values()), rootFolderId };
     }
     async getThumbnailLink(accessToken, refreshToken, fileId) {
         const res = await this.fetchApi('https://content.dropboxapi.com/2/files/get_thumbnail_v2', {
@@ -358,11 +358,10 @@ class DropboxProvider {
         const data = await res.json();
         return data.cursor;
     }
-    async listChanges(accessToken, refreshToken, pageToken) {
+    async *listChanges(accessToken, refreshToken, pageToken) {
         if (!pageToken)
-            return { changes: [] };
+            return;
         let cursor = pageToken;
-        const allChanges = [];
         let hasMore = true;
         while (hasMore) {
             const res = await this.fetchApi('https://api.dropboxapi.com/2/files/list_folder/continue', {
@@ -373,7 +372,10 @@ class DropboxProvider {
             if (!res.ok)
                 throw new Error('Failed to fetch Dropbox changes');
             const data = await res.json();
-            if (data.entries) {
+            hasMore = data.has_more;
+            cursor = data.cursor;
+            if (data.entries && data.entries.length > 0) {
+                const pageChanges = [];
                 for (const item of data.entries) {
                     const isDeleted = item['.tag'] === 'deleted';
                     const resolvedId = item.id || item.path_lower;
@@ -385,17 +387,18 @@ class DropboxProvider {
                         // We map to trashed so it shows in the Trash bin
                         mappedFile.trashed = true;
                     }
-                    allChanges.push({
+                    pageChanges.push({
                         fileId: resolvedId,
                         removed: false, // Don't remove from DB, just mark as trashed
                         file: mappedFile
                     });
                 }
+                yield { changes: pageChanges, newStartPageToken: hasMore ? undefined : cursor };
             }
-            hasMore = data.has_more;
-            cursor = data.cursor;
+            else if (!hasMore) {
+                yield { changes: [], newStartPageToken: cursor };
+            }
         }
-        return { changes: allChanges, newStartPageToken: cursor };
     }
     async uploadFile(accessToken, refreshToken, name, mimeType, filePath, parentId) {
         let parentPath = '';

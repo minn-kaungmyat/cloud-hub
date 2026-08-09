@@ -50,7 +50,7 @@ export class GoogleDriveProvider implements ICloudProvider {
     return data as any; // { email, id, ... }
   }
 
-  async listFiles(accessToken: string, refreshToken: string | null) {
+  async *listFiles(accessToken: string, refreshToken: string | null): AsyncGenerator<{ files: any[]; rootFolderId: string }, void, unknown> {
     const oAuth2Client = this.getGoogleOAuthClient();
     oAuth2Client.setCredentials({ 
       access_token: accessToken,
@@ -61,10 +61,9 @@ export class GoogleDriveProvider implements ICloudProvider {
 
     // Get the actual root folder ID ("My Drive" has a real ID like 0AMm-r4-DDJMqUk9PVA)
     const rootRes = await drive.files.get({ fileId: 'root', fields: 'id' });
-    const rootFolderId = rootRes.data.id;
+    const rootFolderId = rootRes.data.id!;
     console.log('Google Drive root folder ID:', rootFolderId);
 
-    const allFiles: any[] = [];
     let pageToken: string | undefined = undefined;
 
     do {
@@ -75,14 +74,12 @@ export class GoogleDriveProvider implements ICloudProvider {
         pageToken: pageToken,
       });
       
-      if (res.data.files) {
-        allFiles.push(...res.data.files);
-        console.log(`Fetched ${res.data.files.length} files... (Total: ${allFiles.length})`);
+      if (res.data.files && res.data.files.length > 0) {
+        console.log(`Yielding ${res.data.files.length} Google Drive files...`);
+        yield { files: res.data.files, rootFolderId };
       }
       pageToken = res.data.nextPageToken || undefined;
     } while (pageToken);
-    
-    return { files: allFiles, rootFolderId: rootFolderId! };
   }
 
   async getThumbnailLink(accessToken: string, refreshToken: string | null, fileId: string) {
@@ -226,7 +223,7 @@ export class GoogleDriveProvider implements ICloudProvider {
     return res.data.startPageToken as string;
   }
 
-  async listChanges(accessToken: string, refreshToken: string | null, pageToken: string) {
+  async *listChanges(accessToken: string, refreshToken: string | null, pageToken: string): AsyncGenerator<{ changes: any[]; newStartPageToken?: string }, void, unknown> {
     const oAuth2Client = this.getGoogleOAuthClient();
     oAuth2Client.setCredentials({ 
       access_token: accessToken,
@@ -235,9 +232,7 @@ export class GoogleDriveProvider implements ICloudProvider {
     
     const drive = google.drive({ version: 'v3', auth: oAuth2Client });
     
-    const allChanges: any[] = [];
     let currentToken: string | undefined = pageToken;
-    let newStartPageToken: string | undefined = undefined;
 
     do {
       const res: any = await drive.changes.list({
@@ -245,18 +240,17 @@ export class GoogleDriveProvider implements ICloudProvider {
         fields: 'newStartPageToken, nextPageToken, changes(fileId, removed, file(id, name, mimeType, size, parents, modifiedTime, thumbnailLink, trashed, ownedByMe))',
       });
       
-      if (res.data.changes) {
-        allChanges.push(...res.data.changes);
-      }
+      const newStartPageToken = res.data.newStartPageToken || undefined;
       
-      if (res.data.newStartPageToken) {
-        newStartPageToken = res.data.newStartPageToken;
+      if (res.data.changes && res.data.changes.length > 0) {
+        yield { changes: res.data.changes, newStartPageToken };
+      } else if (newStartPageToken) {
+        // Even if no changes, we might need to yield the newStartPageToken
+        yield { changes: [], newStartPageToken };
       }
       
       currentToken = res.data.nextPageToken || undefined;
     } while (currentToken);
-
-    return { changes: allChanges, newStartPageToken };
   }
 
   async uploadFile(

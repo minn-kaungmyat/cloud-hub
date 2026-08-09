@@ -14,7 +14,7 @@ export interface ICloudProvider {
   /**
    * File operations
    */
-  listFiles(accessToken: string, refreshToken: string | null): Promise<{ files: any[]; rootFolderId: string }>;
+  listFiles(accessToken: string, refreshToken: string | null): AsyncGenerator<{ files: any[]; rootFolderId: string }, void, unknown>;
   getThumbnailLink(accessToken: string, refreshToken: string | null, fileId: string): Promise<string | null>;
   renameFile(accessToken: string, refreshToken: string | null, fileId: string, newName: string): Promise<any>;
   downloadFileStream(accessToken: string, refreshToken: string | null, fileId: string, mimeType: string, range?: string): Promise<any>;
@@ -31,5 +31,5 @@ export interface ICloudProvider {
    * Syncing
    */
   getStartPageToken(accessToken: string, refreshToken: string | null): Promise<string>;
-  listChanges(accessToken: string, refreshToken: string | null, pageToken: string): Promise<{ changes: any[]; newStartPageToken?: string }>;
+  listChanges(accessToken: string, refreshToken: string | null, pageToken: string): AsyncGenerator<{ changes: any[]; newStartPageToken?: string }, void, unknown>;
 }

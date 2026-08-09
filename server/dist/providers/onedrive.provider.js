@@ -156,7 +156,7 @@ class OneDriveProvider {
             ownedByMe: true // Graph API typically returns user's own items
         };
     }
-    async listFiles(accessToken, refreshToken) {
+    async *listFiles(accessToken, refreshToken) {
         // Get root folder ID
         const rootRes = await this.fetchGraph('https://graph.microsoft.com/v1.0/me/drive/root', {}, accessToken, refreshToken);
         if (!rootRes.ok)
@@ -164,7 +164,6 @@ class OneDriveProvider {
         const rootData = await rootRes.json();
         const rootFolderId = rootData.id;
         let url = 'https://graph.microsoft.com/v1.0/me/drive/root/delta?select=id,name,file,folder,size,parentReference,lastModifiedDateTime,deleted';
-        const allFilesMap = new Map();
         while (url) {
             const res = await this.fetchGraph(url, {}, accessToken, refreshToken);
             if (!res.ok) {
@@ -172,18 +171,19 @@ class OneDriveProvider {
                 throw new Error(`Failed to list files: ${err}`);
             }
             const data = await res.json();
-            if (data.value) {
+            if (data.value && data.value.length > 0) {
+                const pageFiles = [];
                 for (const item of data.value) {
                     const mapped = this.mapGraphFileToGeneric(item);
                     if (item.deleted) {
                         mapped.trashed = true;
                     }
-                    allFilesMap.set(item.id, mapped);
+                    pageFiles.push(mapped);
                 }
+                yield { files: pageFiles, rootFolderId };
             }
             url = data['@odata.nextLink'] || '';
         }
-        return { files: Array.from(allFilesMap.values()), rootFolderId };
     }
     async getThumbnailLink(accessToken, refreshToken, fileId) {
         const res = await this.fetchGraph(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/thumbnails?select=c512x512,medium,large`, {}, accessToken, refreshToken);
@@ -284,22 +284,25 @@ class OneDriveProvider {
         const data = await res.json();
         return data['@odata.deltaLink'] || '';
     }
-    async listChanges(accessToken, refreshToken, pageToken) {
+    async *listChanges(accessToken, refreshToken, pageToken) {
         if (!pageToken)
-            return { changes: [] };
+            return;
         let url = pageToken;
-        const allChanges = [];
         let newStartPageToken = undefined;
         while (url) {
             const res = await this.fetchGraph(url, {}, accessToken, refreshToken);
             if (!res.ok)
                 throw new Error('Failed to fetch OneDrive changes');
             const data = await res.json();
-            if (data.value) {
+            if (data['@odata.deltaLink']) {
+                newStartPageToken = data['@odata.deltaLink'];
+            }
+            if (data.value && data.value.length > 0) {
+                const pageChanges = [];
                 for (const item of data.value) {
                     const isHardDeleted = item.deleted ? item.deleted.state === 'hardDeleted' : false;
                     if (item.deleted && !isHardDeleted) {
-                        allChanges.push({
+                        pageChanges.push({
                             fileId: item.id,
                             removed: false,
                             file: { id: item.id, trashed: true }
@@ -307,22 +310,24 @@ class OneDriveProvider {
                         continue;
                     }
                     const mappedFile = this.mapGraphFileToGeneric(item);
-                    allChanges.push({
+                    pageChanges.push({
                         fileId: item.id,
                         removed: isHardDeleted,
                         file: isHardDeleted ? null : mappedFile
                     });
                 }
+                yield { changes: pageChanges, newStartPageToken: data['@odata.nextLink'] ? undefined : newStartPageToken };
+            }
+            else if (!data['@odata.nextLink'] && newStartPageToken) {
+                yield { changes: [], newStartPageToken };
             }
             if (data['@odata.nextLink']) {
                 url = data['@odata.nextLink'];
             }
             else {
-                newStartPageToken = data['@odata.deltaLink'];
                 break;
             }
         }
-        return { changes: allChanges, newStartPageToken };
     }
     async uploadFile(accessToken, refreshToken, name, mimeType, filePath, parentId) {
         const stats = fs_1.default.statSync(filePath);
