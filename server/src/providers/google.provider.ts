@@ -358,7 +358,8 @@ export class GoogleDriveProvider implements ICloudProvider {
       throw new Error(`Failed to create Google Drive upload session: ${response.statusText}`);
     }
 
-    const uploadUrl = response.headers['location'];
+    // gaxios Headers might be a standard Headers object or a plain object depending on the environment
+    const uploadUrl = (response.headers as any).get ? (response.headers as any).get('Location') : (response.headers as any).location;
     
     if (!uploadUrl) {
       throw new Error('Google Drive did not return a Location header for the upload session');
