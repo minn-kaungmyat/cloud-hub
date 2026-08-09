@@ -57,7 +57,7 @@ export const FilePreviewModal = () => {
   const isImage = file ? !isSsoi && (file.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(file.name)) : false;
   const isVideo = file ? !isSsoi && (file.mimeType?.startsWith('video/') || /\.(mp4|webm|ogg|mov|mkv)$/i.test(file.name)) : false;
   const isPdf = file ? !isSsoi && (file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name)) : false;
-  const isText = file ? !isSsoi && !isDrawio && (file.mimeType?.startsWith('text/') || file.mimeType === 'application/json' || /\.(txt|js|ts|jsx|tsx|css|html|md|json)$/i.test(file.name)) : false;
+  const isText = file ? !isSsoi && !isDrawio && !isVideo && (file.mimeType?.startsWith('text/') || file.mimeType === 'application/json' || /\.(txt|js|ts|jsx|tsx|css|html|md|json)$/i.test(file.name)) : false;
   const isTextTooLarge = file ? isText && file.size > 2 * 1024 * 1024 : false;
 
   useEffect(() => {

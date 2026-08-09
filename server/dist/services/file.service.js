@@ -74,7 +74,7 @@ class FileService {
                         providerFileId: f.id,
                         provider: account.provider,
                         name: f.name || 'Unknown',
-                        mimeType: f.mimeType || 'application/octet-stream',
+                        mimeType: (f.name?.toLowerCase().endsWith('.ts') ? ((f.size ? BigInt(f.size) : BigInt(0)) > 5 * 1024 * 1024 ? 'video/mp2t' : 'application/typescript') : (f.mimeType || 'application/octet-stream')),
                         size: f.size ? BigInt(f.size) : BigInt(0),
                         parentId: null, // We'll link parents in pass 2
                         modifiedTime: f.modifiedTime ? new Date(f.modifiedTime) : new Date(),
@@ -191,7 +191,7 @@ class FileService {
                             if (f.name !== undefined)
                                 data.name = f.name;
                             if (f.mimeType !== undefined)
-                                data.mimeType = f.mimeType;
+                                data.mimeType = (f.name?.toLowerCase().endsWith('.ts') ? ((f.size ? BigInt(f.size) : BigInt(0)) > 5 * 1024 * 1024 ? 'video/mp2t' : 'application/typescript') : f.mimeType);
                             if (f.size !== undefined)
                                 data.size = f.size ? BigInt(f.size) : BigInt(0);
                             if (parentId !== undefined)
