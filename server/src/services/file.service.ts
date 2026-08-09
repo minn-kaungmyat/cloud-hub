@@ -1092,7 +1092,7 @@ export class FileService {
         targetProviderId,
         size
       );
-      return result;
+      return { ...result, provider: account.provider };
     } catch (error: any) {
       throw new AppError(error.message || `Failed to create upload session on ${account.provider}`, 500);
     }

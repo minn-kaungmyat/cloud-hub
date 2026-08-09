@@ -187,7 +187,7 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
               };
               
               // OneDrive specific required headers for large files chunking if we used chunks, but we upload in one request.
-              if (sessionData.uploadUrl.includes('graph.microsoft.com')) {
+              if (sessionData.provider === 'onedrive' && item.file.size > 0) {
                  directHeaders['Content-Length'] = item.file.size.toString();
                  directHeaders['Content-Range'] = `bytes 0-${item.file.size - 1}/${item.file.size}`;
               }
