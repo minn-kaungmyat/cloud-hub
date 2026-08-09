@@ -253,6 +253,19 @@ export class FileService {
           });
         }
         
+        // Always fetch the latest storage quota to correct any drift from external changes
+        try {
+          const quota = await provider.getDriveQuota(decryptToken(account.accessToken)!, decryptToken(account.refreshToken));
+          if (quota && quota.usage) {
+            await prisma.cloudAccount.update({
+              where: { id: account.id },
+              data: { storageUsed: BigInt(quota.usage) }
+            });
+          }
+        } catch (e) {
+          console.error('Failed to fetch quota during incremental sync:', e);
+        }
+        
         return { count: changes.length };
       } catch (error: any) {
         console.error('Incremental sync failed:', error);

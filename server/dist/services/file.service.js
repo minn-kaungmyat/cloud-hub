@@ -247,6 +247,19 @@ class FileService {
                     data: { syncToken: newStartPageToken, lastSyncedAt: new Date() }
                 });
             }
+            // Always fetch the latest storage quota to correct any drift from external changes
+            try {
+                const quota = await provider.getDriveQuota((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken));
+                if (quota && quota.usage) {
+                    await prisma_1.prisma.cloudAccount.update({
+                        where: { id: account.id },
+                        data: { storageUsed: BigInt(quota.usage) }
+                    });
+                }
+            }
+            catch (e) {
+                console.error('Failed to fetch quota during incremental sync:', e);
+            }
             return { count: changes.length };
         }
         catch (error) {
@@ -833,6 +846,12 @@ class FileService {
             await prisma_1.prisma.file.delete({
                 where: { id }
             });
+            if (cloudAccount.storageUsed !== null && file.size) {
+                await prisma_1.prisma.cloudAccount.update({
+                    where: { id: cloudAccount.id },
+                    data: { storageUsed: { decrement: file.size } }
+                });
+            }
             return { success: true };
         }
         catch (error) {
@@ -918,6 +937,12 @@ class FileService {
                     modifiedTime: driveFile.modifiedTime ? new Date(driveFile.modifiedTime) : new Date(),
                 }
             });
+            if (account.storageUsed !== null && dbFile.size) {
+                await prisma_1.prisma.cloudAccount.update({
+                    where: { id: account.id },
+                    data: { storageUsed: { increment: dbFile.size } }
+                });
+            }
             return { ...dbFile, size: Number(dbFile.size) };
         }
         finally {
@@ -950,7 +975,7 @@ class FileService {
         }
         try {
             const result = await provider.createUploadSession((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), name, mimeType, targetProviderId, size);
-            return result;
+            return { ...result, provider: account.provider };
         }
         catch (error) {
             throw new AppError_1.AppError(error.message || `Failed to create upload session on ${account.provider}`, 500);
@@ -986,6 +1011,12 @@ class FileService {
                 cloudAccountId: account.id
             }
         });
+        if (account.storageUsed !== null && newFile.size) {
+            await prisma_1.prisma.cloudAccount.update({
+                where: { id: account.id },
+                data: { storageUsed: { increment: newFile.size } }
+            });
+        }
         return {
             ...newFile,
             size: Number(newFile.size)
