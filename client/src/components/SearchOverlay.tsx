@@ -52,7 +52,7 @@ const SearchFileRow = ({ file }: { file: CloudFile }) => {
     params.set('folder', targetFolderId);
     
     // Use navigate with state for auto-scroll
-    navigate(`/?${params.toString()}`, { state: { scrollToId: file.id } });
+    navigate(`/drive?${params.toString()}`, { state: { scrollToId: file.id } });
     
     // 3. Highlight specific file
     setSelectedFile(file.id);
