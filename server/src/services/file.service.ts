@@ -956,6 +956,13 @@ export class FileService {
         where: { id }
       });
 
+      if (cloudAccount.storageUsed !== null && file.size) {
+        await prisma.cloudAccount.update({
+          where: { id: cloudAccount.id },
+          data: { storageUsed: { decrement: file.size } }
+        });
+      }
+
       return { success: true };
     } catch (error: any) {
       throw new AppError(error.message || `Failed to permanently delete file on ${cloudAccount.provider}`, 500);
@@ -1051,6 +1058,13 @@ export class FileService {
         }
       });
 
+      if (account.storageUsed !== null && dbFile.size) {
+        await prisma.cloudAccount.update({
+          where: { id: account.id },
+          data: { storageUsed: { increment: dbFile.size } }
+        });
+      }
+
       return { ...dbFile, size: Number(dbFile.size) };
     } finally {
       // 4. Guaranteed to run whether upload succeeds OR throws an error! (Prevents disk leaks)
@@ -1130,6 +1144,13 @@ export class FileService {
         cloudAccountId: account.id
       }
     });
+
+    if (account.storageUsed !== null && newFile.size) {
+      await prisma.cloudAccount.update({
+        where: { id: account.id },
+        data: { storageUsed: { increment: newFile.size } }
+      });
+    }
 
     return {
       ...newFile,
