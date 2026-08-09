@@ -338,16 +338,19 @@ export class GoogleDriveProvider implements ICloudProvider {
     // Google Drive resumable upload endpoint
     const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable';
     
-    // We must manually fetch the auth headers since we're using native fetch instead of the googleapis client
-    const headers = await oAuth2Client.getRequestHeaders();
+    // Explicitly get the access token (this will also automatically refresh it if it's expired)
+    const tokenResponse = await oAuth2Client.getAccessToken();
+    const token = tokenResponse.token || accessToken;
     
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        ...headers,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
         'X-Upload-Content-Type': mimeType,
         'X-Upload-Content-Length': size.toString(),
+        // Pass the frontend origin so Google sets proper CORS headers for the browser's subsequent PUT request
+        'Origin': process.env.VITE_APP_URL || process.env.API_URL || 'https://cloudhub-app.vercel.app'
       },
       body: JSON.stringify(fileMetadata),
     });
