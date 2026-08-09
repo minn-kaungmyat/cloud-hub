@@ -4,7 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
 import archiver = require('archiver');
 import { ProviderFactory } from '../providers/provider.factory';
-import { decryptToken } from '../utils/encryption';
+import { decryptToken } from '../utils/crypto';
 
 export class FileController {
   
