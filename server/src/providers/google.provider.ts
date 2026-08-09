@@ -338,30 +338,27 @@ export class GoogleDriveProvider implements ICloudProvider {
     // Google Drive resumable upload endpoint
     const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable';
     
-    // Explicitly get the access token (this will also automatically refresh it if it's expired)
-    const tokenResponse = await oAuth2Client.getAccessToken();
-    const token = tokenResponse.token || accessToken;
-    
-    const response = await fetch(url, {
+    // oAuth2Client.request automatically refreshes tokens and injects the Authorization header
+    const response = await oAuth2Client.request({
+      url,
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
         'X-Upload-Content-Type': mimeType,
         'X-Upload-Content-Length': size.toString(),
         // Pass the frontend origin so Google sets proper CORS headers for the browser's subsequent PUT request
         'Origin': process.env.VITE_APP_URL || process.env.API_URL || 'https://cloudhub-app.vercel.app'
       },
-      body: JSON.stringify(fileMetadata),
+      data: fileMetadata,
+      validateStatus: () => true // Prevent it from throwing instantly so we can log the error body
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Google Drive Upload Session Error:', errorText);
+    if (response.status !== 200) {
+      console.error('Google Drive Upload Session Error:', response.data);
       throw new Error(`Failed to create Google Drive upload session: ${response.statusText}`);
     }
 
-    const uploadUrl = response.headers.get('Location');
+    const uploadUrl = response.headers['location'];
     
     if (!uploadUrl) {
       throw new Error('Google Drive did not return a Location header for the upload session');
