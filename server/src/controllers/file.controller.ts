@@ -4,6 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
 import archiver = require('archiver');
 import { ProviderFactory } from '../providers/provider.factory';
+import { decryptToken } from '../utils/encryption';
 
 export class FileController {
   
@@ -223,8 +224,8 @@ export class FileController {
       for (const f of filesToZip) {
         try {
           const streamResponse = await provider.downloadFileStream(
-            cloudAccount.accessToken,
-            cloudAccount.refreshToken,
+            decryptToken(cloudAccount.accessToken)!,
+            decryptToken(cloudAccount.refreshToken),
             f.dbFile.providerFileId,
             f.dbFile.mimeType
           );
