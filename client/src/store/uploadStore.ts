@@ -167,8 +167,7 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
             )
           }));
           
-          try {
-            // 1. Request Upload Session
+          // 1. Request Upload Session
             const sessionRes = await api.post(`/api/files/upload-session/${item.accountId}`, {
               name: item.file.name,
               mimeType: item.file.type || 'application/octet-stream',
