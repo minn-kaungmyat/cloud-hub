@@ -171,7 +171,11 @@ export const useUploadStore = create<UploadStore>((set, get) => ({
           formData.append('file', item.file);
           formData.append('parentId', item.folderId);
           
-          await api.post(`/api/files/upload/${item.accountId}`, formData, {
+          const baseUrl = import.meta.env.VITE_DIRECT_BACKEND_URL || '';
+          const uploadPath = `/api/files/upload/${item.accountId}`;
+          const fullUrl = baseUrl ? `${baseUrl.replace(/\/$/, '')}${uploadPath}` : uploadPath;
+          
+          await api.post(fullUrl, formData, {
             signal: abortController.signal,
             headers: { 'Content-Type': 'multipart/form-data' },
             onUploadProgress: (progressEvent) => {
