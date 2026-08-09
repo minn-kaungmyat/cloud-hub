@@ -338,34 +338,36 @@ export class GoogleDriveProvider implements ICloudProvider {
     // Google Drive resumable upload endpoint
     const url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable';
     
-    // oAuth2Client.request automatically refreshes tokens and injects the Authorization header
-    const response = await oAuth2Client.request({
-      url,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Upload-Content-Type': mimeType,
-        'X-Upload-Content-Length': size.toString(),
-        // Pass the frontend origin so Google sets proper CORS headers for the browser's subsequent PUT request
-        'Origin': process.env.VITE_APP_URL || process.env.API_URL || 'https://cloudhub-app.vercel.app'
-      },
-      data: fileMetadata,
-      validateStatus: () => true // Prevent it from throwing instantly so we can log the error body
-    });
+    try {
+      // oAuth2Client.request automatically refreshes tokens and injects the Authorization header.
+      // It relies on throwing an error on 401 to trigger the refresh interceptor, so we don't use validateStatus.
+      const response = await oAuth2Client.request({
+        url,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Upload-Content-Type': mimeType,
+          'X-Upload-Content-Length': size.toString(),
+          'Origin': process.env.VITE_APP_URL || process.env.API_URL || 'https://cloudhub-app.vercel.app'
+        },
+        data: fileMetadata
+      });
 
-    if (response.status !== 200) {
-      console.error('Google Drive Upload Session Error:', response.data);
-      const details = typeof response.data === 'object' ? JSON.stringify(response.data) : response.data;
-      throw new Error(`Failed to create Google Drive upload session: ${response.status} ${response.statusText}. Details: ${details}`);
+      const uploadUrl = (response.headers as any).get ? (response.headers as any).get('Location') : (response.headers as any).location;
+      
+      if (!uploadUrl) {
+        throw new Error('Google Drive did not return a Location header for the upload session');
+      }
+
+      return { direct: true, uploadUrl, method: 'PUT' };
+      
+    } catch (error: any) {
+      if (error.response) {
+        const details = typeof error.response.data === 'object' ? JSON.stringify(error.response.data) : error.response.data;
+        console.error('Google Drive Upload Session Error:', details);
+        throw new Error(`Failed to create Google Drive upload session: ${error.response.status} ${error.response.statusText}. Details: ${details}`);
+      }
+      throw error;
     }
-
-    // gaxios Headers might be a standard Headers object or a plain object depending on the environment
-    const uploadUrl = (response.headers as any).get ? (response.headers as any).get('Location') : (response.headers as any).location;
-    
-    if (!uploadUrl) {
-      throw new Error('Google Drive did not return a Location header for the upload session');
-    }
-
-    return { direct: true, uploadUrl, method: 'PUT' };
   }
 }
