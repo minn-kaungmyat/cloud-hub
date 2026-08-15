@@ -8,6 +8,7 @@ import { Filter } from 'lucide-react';
 import { useFileStore } from '../store/fileStore';
 import { useAdvancedBrowse } from '../hooks/useFiles';
 import { useCloudAccounts } from '../hooks/useCloudAccounts';
+import { ReconnectBanner } from '../components/ReconnectBanner';
 
 const HomePage = () => {
   const [searchParams] = useSearchParams();
@@ -61,6 +62,16 @@ const HomePage = () => {
     prevSyncing.current = isAnySyncing;
   }, [isAnySyncing, refetch]);
 
+  const expiredAccounts = useMemo(() => {
+    return accounts.filter(acc => 
+      acc.syncStatus === 'failed' && (
+        acc.syncError?.toLowerCase().includes('expired') ||
+        acc.syncError?.toLowerCase().includes('invalid_grant') ||
+        acc.syncError?.toLowerCase().includes('auth')
+      )
+    );
+  }, [accounts]);
+
   return (
     <div className="flex-1 flex min-h-0 min-w-0 relative bg-zinc-950">
       {/* Main Content Area */}
@@ -97,6 +108,8 @@ const HomePage = () => {
         />
         
         <FileActionBar hideNewButton />
+        
+        <ReconnectBanner expiredAccounts={expiredAccounts} />
 
         {/* Grid Area */}
         <div className="flex-1 overflow-y-auto relative">

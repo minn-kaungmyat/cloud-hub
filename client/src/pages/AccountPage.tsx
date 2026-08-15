@@ -27,8 +27,11 @@ const AccountPage = () => {
   
   const accountId = ['recent', 'favorites', 'large-files'].includes(activeAccount) ? undefined : activeAccount;
   const currentAccount = accountId ? accounts.find(a => a.id === accountId) : null;
-  const isExpired = currentAccount?.syncStatus === 'failed' && currentAccount?.syncError?.toLowerCase().includes('expired');
-
+  const isExpired = currentAccount?.syncStatus === 'failed' && (
+    currentAccount?.syncError?.toLowerCase().includes('expired') ||
+    currentAccount?.syncError?.toLowerCase().includes('invalid_grant') ||
+    currentAccount?.syncError?.toLowerCase().includes('auth')
+  );
   const segments = [
     { id: 'root', label: accountId ? 'Account Root' : 'All Files' },
     ...pathData,
