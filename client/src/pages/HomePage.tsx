@@ -66,8 +66,7 @@ const HomePage = () => {
     return accounts.filter(acc => 
       acc.syncStatus === 'failed' && (
         acc.syncError?.toLowerCase().includes('expired') ||
-        acc.syncError?.toLowerCase().includes('invalid_grant') ||
-        acc.syncError?.toLowerCase().includes('auth')
+        acc.syncError?.toLowerCase().includes('invalid_grant')
       )
     );
   }, [accounts]);

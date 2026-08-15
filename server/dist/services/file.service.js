@@ -16,15 +16,23 @@ class FileService {
             return await operation();
         }
         catch (error) {
-            const isAuthError = error.response?.status === 401 ||
-                error.message?.toLowerCase().includes('invalid_grant') ||
+            const isAuthError = error.message?.toLowerCase().includes('invalid_grant') ||
+                (error.response?.status === 401 && !error.response?.data?.error?.includes?.('rate')) ||
                 error.code === 401 ||
                 error.code === '401';
             if (isAuthError) {
-                await prisma_1.prisma.cloudAccount.update({
+                // Only mark as expired if the account is NOT currently syncing.
+                // The sync process has its own error handling and we must not interfere.
+                const account = await prisma_1.prisma.cloudAccount.findUnique({
                     where: { id: accountId },
-                    data: { syncStatus: 'failed', syncError: 'invalid_grant' },
+                    select: { syncStatus: true },
                 });
+                if (account && account.syncStatus !== 'syncing') {
+                    await prisma_1.prisma.cloudAccount.update({
+                        where: { id: accountId },
+                        data: { syncStatus: 'failed', syncError: 'invalid_grant' },
+                    });
+                }
             }
             throw error;
         }

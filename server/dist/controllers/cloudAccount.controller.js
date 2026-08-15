@@ -67,10 +67,19 @@ class CloudAccountController {
                     console.error('Failed to fetch drive quota', e);
                 }
                 const account = await cloudAccount_service_1.cloudAccountService.upsertAccount(userId, provider, userInfo.id, userInfo.email, tokens.access_token, tokens.refresh_token, tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : null, storageUsed, storageTotal);
-                // Auto-sync files in background
-                file_service_1.fileService.syncFiles(account.id, userId).catch(err => {
-                    console.error('Initial file sync failed:', err);
-                });
+                // Sync files in background.
+                // If the account was previously synced (has a syncToken), use incremental sync
+                // to avoid deleting existing files and destroying the parent hierarchy.
+                if (account.syncToken) {
+                    file_service_1.fileService.incrementalSync(account.id, userId).catch(err => {
+                        console.error('Incremental sync after reconnect failed:', err);
+                    });
+                }
+                else {
+                    file_service_1.fileService.syncFiles(account.id, userId).catch(err => {
+                        console.error('Initial file sync failed:', err);
+                    });
+                }
                 return res.redirect(`${frontendUrl}/drive?account=${account.id}`);
             }
             catch (e) {

@@ -85,10 +85,18 @@ export class CloudAccountController {
           storageTotal
         );
 
-        // Auto-sync files in background
-        fileService.syncFiles(account.id, userId).catch(err => {
-          console.error('Initial file sync failed:', err);
-        });
+        // Sync files in background.
+        // If the account was previously synced (has a syncToken), use incremental sync
+        // to avoid deleting existing files and destroying the parent hierarchy.
+        if (account.syncToken) {
+          fileService.incrementalSync(account.id, userId).catch(err => {
+            console.error('Incremental sync after reconnect failed:', err);
+          });
+        } else {
+          fileService.syncFiles(account.id, userId).catch(err => {
+            console.error('Initial file sync failed:', err);
+          });
+        }
 
         return res.redirect(`${frontendUrl}/drive?account=${account.id}`);
       } catch (e: any) {
