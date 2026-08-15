@@ -6,6 +6,8 @@ const asyncHandler_1 = require("../utils/asyncHandler");
 const AppError_1 = require("../utils/AppError");
 const archiver = require("archiver");
 const provider_factory_1 = require("../providers/provider.factory");
+const crypto_1 = require("../utils/crypto");
+const stream_1 = require("stream");
 class FileController {
     syncFiles = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         const accountId = req.params.accountId;
@@ -110,8 +112,13 @@ class FileController {
                 res.setHeader('Content-Type', contentType);
             }
             res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
-            const arrayBuffer = await response.arrayBuffer();
-            res.send(Buffer.from(arrayBuffer));
+            if (response.body) {
+                const readable = stream_1.Readable.fromWeb(response.body);
+                readable.pipe(res);
+            }
+            else {
+                res.status(204).end();
+            }
         }
         catch (error) {
             // Fail silently for thumbnails to prevent IP bans
@@ -171,7 +178,7 @@ class FileController {
         }
         if (result.isArchive) {
             const { filesToZip, cloudAccount } = result;
-            const archive = archiver('zip', { zlib: { level: 9 } });
+            const archive = archiver('zip', { zlib: { level: 1 } });
             archive.on('error', (err) => {
                 console.error('Archiver error:', err);
             });
@@ -180,7 +187,7 @@ class FileController {
             const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
             for (const f of filesToZip) {
                 try {
-                    const streamResponse = await provider.downloadFileStream(cloudAccount.accessToken, cloudAccount.refreshToken, f.dbFile.providerFileId, f.dbFile.mimeType);
+                    const streamResponse = await provider.downloadFileStream((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), f.dbFile.providerFileId, f.dbFile.mimeType);
                     let finalName = f.path;
                     if (cloudAccount.provider === 'google-drive') {
                         if (f.dbFile.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {

@@ -5,6 +5,7 @@ import { AppError } from '../utils/AppError';
 import archiver = require('archiver');
 import { ProviderFactory } from '../providers/provider.factory';
 import { decryptToken } from '../utils/crypto';
+import { Readable } from 'stream';
 
 export class FileController {
   
@@ -139,8 +140,12 @@ export class FileController {
       
       res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
       
-      const arrayBuffer = await response.arrayBuffer();
-      res.send(Buffer.from(arrayBuffer));
+      if (response.body) {
+        const readable = Readable.fromWeb(response.body as any);
+        readable.pipe(res);
+      } else {
+        res.status(204).end();
+      }
     } catch (error) {
       // Fail silently for thumbnails to prevent IP bans
       res.status(204).end();
@@ -210,7 +215,7 @@ export class FileController {
 
     if ((result as any).isArchive) {
       const { filesToZip, cloudAccount } = result as any;
-      const archive = (archiver as any)('zip', { zlib: { level: 9 } });
+      const archive = (archiver as any)('zip', { zlib: { level: 1 } });
 
       archive.on('error', (err: any) => {
         console.error('Archiver error:', err);

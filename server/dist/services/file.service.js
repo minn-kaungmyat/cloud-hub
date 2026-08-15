@@ -536,7 +536,7 @@ class FileService {
                 let result = [];
                 for (const child of children) {
                     if (child.isFolder) {
-                        result = result.concat(await getDescendants(child.providerFileId, `${currentPath}${child.name}/`));
+                        result = result.concat(await getDescendants(child.id, `${currentPath}${child.name}/`));
                     }
                     else {
                         result.push({ dbFile: child, path: `${currentPath}${child.name}` });
@@ -544,7 +544,7 @@ class FileService {
                 }
                 return result;
             };
-            const filesToZip = await getDescendants(file.providerFileId, `${file.name}/`);
+            const filesToZip = await getDescendants(file.id, `${file.name}/`);
             return {
                 isArchive: true,
                 filesToZip,
