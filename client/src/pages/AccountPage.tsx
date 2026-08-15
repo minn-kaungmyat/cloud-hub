@@ -2,7 +2,7 @@ import { CommandBar } from '../components/CommandBar';
 import { FileActionBar } from '../components/FileActionBar';
 import { FileList } from '../components/FileList';
 import { UploadDropzone } from '../components/UploadDropzone';
-import { ExpiredState } from '../components/ExpiredState';
+import { ReconnectBanner } from '../components/ReconnectBanner';
 import { useCloudAccounts } from '../hooks/useCloudAccounts';
 import { useFileStore } from '../store/fileStore';
 import { useUIStore } from '../store/uiStore';
@@ -63,12 +63,12 @@ const AccountPage = () => {
       />
       <FileActionBar />
       
+      {isExpired && currentAccount && (
+        <ReconnectBanner expiredAccounts={[currentAccount]} />
+      )}
+
       <div className="flex-1 overflow-y-auto relative">
-        {isExpired && currentAccount ? (
-          <ExpiredState providerId={currentAccount.provider} />
-        ) : (
-          <FileList />
-        )}
+        <FileList />
       </div>
 
       {/* Global Overlays */}

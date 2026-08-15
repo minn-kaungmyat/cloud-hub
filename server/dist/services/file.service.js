@@ -11,6 +11,24 @@ const provider_factory_1 = require("../providers/provider.factory");
 const AppError_1 = require("../utils/AppError");
 const uuid_1 = require("uuid");
 class FileService {
+    async handleProviderError(accountId, operation) {
+        try {
+            return await operation();
+        }
+        catch (error) {
+            const isAuthError = error.response?.status === 401 ||
+                error.message?.toLowerCase().includes('invalid_grant') ||
+                error.code === 401 ||
+                error.code === '401';
+            if (isAuthError) {
+                await prisma_1.prisma.cloudAccount.update({
+                    where: { id: accountId },
+                    data: { syncStatus: 'failed', syncError: 'invalid_grant' },
+                });
+            }
+            throw error;
+        }
+    }
     async syncFiles(cloudAccountId, userId) {
         const account = await prisma_1.prisma.cloudAccount.findFirst({
             where: { id: cloudAccountId, userId },
@@ -466,7 +484,7 @@ class FileService {
         if (!(0, crypto_1.decryptToken)(file.cloudAccount.accessToken))
             return null;
         const provider = provider_factory_1.ProviderFactory.getProvider(file.provider);
-        let url = await provider.getThumbnailLink((0, crypto_1.decryptToken)(file.cloudAccount.accessToken), (0, crypto_1.decryptToken)(file.cloudAccount.refreshToken), file.providerFileId);
+        let url = await this.handleProviderError(file.cloudAccountId, () => provider.getThumbnailLink((0, crypto_1.decryptToken)(file.cloudAccount.accessToken), (0, crypto_1.decryptToken)(file.cloudAccount.refreshToken), file.providerFileId));
         if (url) {
             if (file.provider === 'google-drive') {
                 url = url.replace(/=s\d+$/, '=s512');
@@ -494,7 +512,7 @@ class FileService {
         const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
         let updatedDriveFile;
         try {
-            updatedDriveFile = await provider.renameFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, newName);
+            updatedDriveFile = await this.handleProviderError(cloudAccount.id, () => provider.renameFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, newName));
         }
         catch (error) {
             if (error.response?.status === 403) {
@@ -554,7 +572,7 @@ class FileService {
         }
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
-            const streamResponse = await provider.downloadFileStream((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, file.mimeType, range);
+            const streamResponse = await this.handleProviderError(cloudAccount.id, () => provider.downloadFileStream((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, file.mimeType, range));
             let finalName = file.name;
             if (cloudAccount.provider === 'google-drive') {
                 if (file.mimeType === 'application/vnd.google-apps.document' && !finalName.endsWith('.docx')) {
@@ -611,7 +629,7 @@ class FileService {
         }
         try {
             const provider = provider_factory_1.ProviderFactory.getProvider(cloudAccount.provider);
-            const updatedDriveFile = await provider.moveFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, targetProviderId);
+            const updatedDriveFile = await this.handleProviderError(cloudAccount.id, () => provider.moveFile((0, crypto_1.decryptToken)(cloudAccount.accessToken), (0, crypto_1.decryptToken)(cloudAccount.refreshToken), file.providerFileId, targetProviderId));
             // Update local DB
             const updatedFile = await prisma_1.prisma.file.update({
                 where: { id },
@@ -651,7 +669,7 @@ class FileService {
                 targetProviderId = parentRecord.providerFileId;
             }
             const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
-            const driveFolder = await provider.createFolder((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), folderName, targetProviderId);
+            const driveFolder = await this.handleProviderError(account.id, () => provider.createFolder((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), folderName, targetProviderId));
             // Create local DB record
             const newFolder = await prisma_1.prisma.file.create({
                 data: {
@@ -910,7 +928,7 @@ class FileService {
             }
             // 1. Upload to Provider
             const provider = provider_factory_1.ProviderFactory.getProvider(account.provider);
-            const driveFile = await provider.uploadFile((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), originalName, mimeType, filePath, targetProviderId);
+            const driveFile = await this.handleProviderError(account.id, () => provider.uploadFile((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), originalName, mimeType, filePath, targetProviderId));
             // 3. Insert into our PostgreSQL DB so it appears instantly
             const dbFile = await prisma_1.prisma.file.create({
                 data: {
@@ -963,7 +981,7 @@ class FileService {
             targetProviderId = parentRecord.providerFileId;
         }
         try {
-            const result = await provider.createUploadSession((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), name, mimeType, targetProviderId, size);
+            const result = await this.handleProviderError(account.id, () => provider.createUploadSession((0, crypto_1.decryptToken)(account.accessToken), (0, crypto_1.decryptToken)(account.refreshToken), name, mimeType, targetProviderId, size));
             return { ...result, provider: account.provider };
         }
         catch (error) {

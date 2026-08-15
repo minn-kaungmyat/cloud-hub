@@ -12,10 +12,9 @@ export class FileService {
     } catch (error: any) {
       const isAuthError =
         error.response?.status === 401 ||
-        error.response?.status === 403 ||
-        error.message?.includes('invalid_grant') ||
-        error.message?.includes('auth') ||
-        error.code === 401;
+        error.message?.toLowerCase().includes('invalid_grant') ||
+        error.code === 401 ||
+        error.code === '401';
 
       if (isAuthError) {
         await prisma.cloudAccount.update({
