@@ -53,3 +53,18 @@ export const useIncrementalSync = () => {
     }
   });
 };
+
+export const useFullSync = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (accountId: string) => {
+      const res = await api.post(`/api/files/sync/${accountId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['cloudAccounts'] });
+    }
+  });
+};

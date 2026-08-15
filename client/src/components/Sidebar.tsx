@@ -7,7 +7,7 @@ import { SidebarSection } from './SidebarSection';
 import { AddAccountButton } from './AddAccountButton';
 import { ProviderIcon } from './ProviderIcon';
 import { StatusBadge } from './StatusBadge';
-import { useCloudAccounts, useIncrementalSync } from '../hooks/useCloudAccounts';
+import { useCloudAccounts, useIncrementalSync, useFullSync } from '../hooks/useCloudAccounts';
 import { useActiveAccount } from '../hooks/useActiveAccount';
 import { useAuthStore } from '../store/authStore';
 
@@ -15,7 +15,10 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: accounts = [], isLoading } = useCloudAccounts();
-  const { mutate: incrementalSync, isPending: isSyncing, variables: syncingAccountId } = useIncrementalSync();
+  const { mutate: incrementalSync, isPending: isIncSyncing, variables: incSyncAccountId } = useIncrementalSync();
+  const { mutate: fullSync, isPending: isFullSyncing, variables: fullSyncAccountId } = useFullSync();
+  const isSyncing = isIncSyncing || isFullSyncing;
+  const syncingAccountId = incSyncAccountId || fullSyncAccountId;
   const { token } = useAuthStore();
   
   const activeItem = useActiveAccount();
@@ -79,7 +82,12 @@ export const Sidebar = () => {
                       title="Sync files"
                     onClick={(e) => {
                       e.stopPropagation();
-                      incrementalSync(account.id);
+                      // Use full resync for broken accounts, incremental for healthy ones
+                      if (account.syncStatus === 'failed') {
+                        fullSync(account.id);
+                      } else {
+                        incrementalSync(account.id);
+                      }
                     }}
                     className={`text-zinc-500 hover:text-zinc-300 p-1.5 rounded-sm hover:bg-zinc-800 transition-colors ${
                       (isSyncing && syncingAccountId === account.id)

@@ -1,4 +1,4 @@
-import { MoreHorizontal, Edit3, RefreshCw, Unlink } from 'lucide-react';
+import { MoreHorizontal, RefreshCw, Unlink, HardDriveDownload } from 'lucide-react';
 import { ProviderIcon, getProviderLabel } from './ProviderIcon';
 import { StatusBadge } from './StatusBadge';
 import { StorageGauge } from './StorageGauge';
@@ -7,9 +7,12 @@ import type { CloudAccount } from '../types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../utils/api';
 import { toast } from 'sonner';
+import { useAuthStore } from '../store/authStore';
+import { useFullSync } from '../hooks/useCloudAccounts';
 
 export const AccountCard = ({ account }: { account: CloudAccount }) => {
   const queryClient = useQueryClient();
+  const { token } = useAuthStore();
 
   const disconnectMutation = useMutation({
     mutationFn: async () => {
@@ -24,9 +27,31 @@ export const AccountCard = ({ account }: { account: CloudAccount }) => {
     }
   });
 
+  const { mutate: fullSync } = useFullSync();
+
   const items = [
-    { id: 'rename', label: 'Rename', icon: <Edit3 size={14} />, onClick: () => {} },
-    { id: 'refresh', label: 'Refresh Auth', icon: <RefreshCw size={14} />, onClick: () => {} },
+    { 
+      id: 'resync', 
+      label: 'Full Resync', 
+      icon: <HardDriveDownload size={14} />, 
+      onClick: () => {
+        if (confirm('This will re-download your entire file index from the cloud provider. Continue?')) {
+          toast.info('Full resync started. This may take a minute...');
+          fullSync(account.id, {
+            onSuccess: () => toast.success('Full resync complete'),
+            onError: () => toast.error('Full resync failed')
+          });
+        }
+      }
+    },
+    { 
+      id: 'refresh', 
+      label: 'Refresh Auth', 
+      icon: <RefreshCw size={14} />, 
+      onClick: () => {
+        window.location.assign(`${import.meta.env.VITE_API_URL}/api/cloud-accounts/auth/${account.provider}?token=${token}`);
+      }
+    },
     { 
       id: 'disconnect', 
       label: 'Disconnect', 
@@ -64,3 +89,4 @@ export const AccountCard = ({ account }: { account: CloudAccount }) => {
     </div>
   );
 };
+
