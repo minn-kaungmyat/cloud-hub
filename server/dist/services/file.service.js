@@ -118,19 +118,25 @@ class FileService {
             }
             // Pass 2: Resolve parent relationships
             if (relationships.length > 0) {
-                const CHUNK_SIZE = 1000;
+                const CHUNK_SIZE = 500;
                 for (let i = 0; i < relationships.length; i += CHUNK_SIZE) {
                     const chunk = relationships.slice(i, i + CHUNK_SIZE);
-                    await prisma_1.prisma.$transaction(chunk.map(rel => {
+                    // Use individual updates instead of $transaction to prevent one bad
+                    // parent from rolling back the entire chunk of parent resolutions.
+                    await Promise.all(chunk.map(async (rel) => {
                         const parentId = localIdMap.get(rel.parentProviderId);
-                        if (parentId) {
-                            return prisma_1.prisma.file.update({
+                        if (!parentId)
+                            return; // Parent not in listing (e.g. shared drive root)
+                        try {
+                            await prisma_1.prisma.file.update({
                                 where: { id: rel.childId },
-                                data: { parentId }
+                                data: { parentId },
                             });
                         }
-                        // Skip orphans or parents not in map by returning a dummy promise
-                        return prisma_1.prisma.file.findUnique({ where: { id: '00000000-0000-0000-0000-000000000000' } });
+                        catch (e) {
+                            // Silently skip — this file stays at root rather than crashing
+                            // the entire sync. Common for shared/orphaned parent folders.
+                        }
                     }));
                 }
             }

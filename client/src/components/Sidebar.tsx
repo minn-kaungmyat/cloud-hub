@@ -63,7 +63,7 @@ export const Sidebar = () => {
               active={activeItem === account.id && location.pathname === '/drive'}
               suffix={
                 <div className="flex items-center gap-1.5">
-                  {account.syncStatus === 'failed' && account.syncError?.toLowerCase().includes('expired') ? (
+                  {account.syncStatus === 'failed' && (account.syncError?.toLowerCase().includes('expired') || account.syncError?.toLowerCase().includes('invalid_grant')) ? (
                     <button
                       title="Connection expired. Click to reconnect."
                       onClick={(e) => {
@@ -90,7 +90,7 @@ export const Sidebar = () => {
                     <RefreshCw size={12} className={isSyncing && syncingAccountId === account.id ? "animate-spin text-accent" : ""} />
                   </button>
                   )}
-                  <StatusBadge status={account.syncStatus === 'failed' && account.syncError?.toLowerCase().includes('expired') ? 'expired' : account.status} />
+                  <StatusBadge status={account.syncStatus === 'failed' && (account.syncError?.toLowerCase().includes('expired') || account.syncError?.toLowerCase().includes('invalid_grant')) ? 'expired' : account.status} />
                 </div>
               }
               onClick={() => navigate(`/drive?account=${account.id}`)}
